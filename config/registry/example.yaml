@@ -1,0 +1,18 @@
+node:
+  id: registry-node-1
+  listen_address: 0.0.0.0:50051
+  advertise_address: registry-node-1:50051
+  storage_dir: ./data/registry-node-1
+
+cluster:
+  seed_peers:
+    - registry-node-1:50051
+    - registry-node-2:50051
+    - registry-node-3:50051
+  gossip_interval_seconds: 3
+  reconcile_interval_seconds: 15
+  peer_timeout_seconds: 10
+  max_gossip_fanout: 2
+
+service:
+  heartbeat_ttl_seconds: 12

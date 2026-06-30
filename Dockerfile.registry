@@ -1,0 +1,17 @@
+FROM golang:1.24-alpine AS builder
+
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/registry ./cmd/registry
+
+FROM alpine:3.20
+
+WORKDIR /app
+COPY --from=builder /out/registry /usr/local/bin/registry
+COPY config /app/config
+
+ENTRYPOINT ["registry"]
+CMD ["-config", "/app/config/registry/node-1.yaml"]

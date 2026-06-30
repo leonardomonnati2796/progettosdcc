@@ -1,0 +1,5 @@
+.git
+.gitignore
+.tools
+**/*_test.go
+bin

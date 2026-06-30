@@ -1,0 +1,122 @@
+syntax = "proto3";
+
+package registry.v1;
+
+option go_package = "github.com/leonardomonnati2796/distributed-service-registry/pkg/api;apiv1";
+
+enum HealthStatus {
+  HEALTH_STATUS_UNSPECIFIED = 0;
+  HEALTH_STATUS_SERVING = 1;
+  HEALTH_STATUS_NOT_SERVING = 2;
+  HEALTH_STATUS_DEGRADED = 3;
+}
+
+message ServiceRecord {
+  string service_name = 1;
+  string service_id = 2;
+  string endpoint = 3;
+  string version = 4;
+  HealthStatus health_status = 5;
+  int64 last_heartbeat_unix = 6;
+  int64 updated_at_unix = 7;
+  string owner_node_id = 8;
+  uint64 logical_version = 9;
+}
+
+message RegisterServiceRequest {
+  ServiceRecord record = 1;
+}
+
+message RegisterServiceResponse {
+  bool accepted = 1;
+  string message = 2;
+}
+
+message DeregisterServiceRequest {
+  string service_name = 1;
+  string service_id = 2;
+}
+
+message DeregisterServiceResponse {
+  bool accepted = 1;
+  string message = 2;
+}
+
+message HeartbeatRequest {
+  string service_name = 1;
+  string service_id = 2;
+  HealthStatus health_status = 3;
+  int64 heartbeat_unix = 4;
+}
+
+message HeartbeatResponse {
+  bool accepted = 1;
+  string message = 2;
+}
+
+message GetServiceRequest {
+  string service_name = 1;
+  string service_id = 2;
+}
+
+message GetServiceResponse {
+  repeated ServiceRecord records = 1;
+}
+
+message ListServicesRequest {}
+
+message ListServicesResponse {
+  repeated ServiceRecord records = 1;
+}
+
+message NodeInfo {
+  string node_id = 1;
+  string grpc_address = 2;
+  int64 updated_at_unix = 3;
+}
+
+message JoinClusterRequest {
+  NodeInfo node = 1;
+}
+
+message JoinClusterResponse {
+  repeated NodeInfo peers = 1;
+  repeated ServiceRecord records = 2;
+}
+
+message GossipSyncRequest {
+  string source_node_id = 1;
+  repeated ServiceRecord records = 2;
+  repeated NodeInfo peers = 3;
+  int64 sent_at_unix = 4;
+}
+
+message GossipSyncResponse {
+  bool accepted = 1;
+  int64 received_at_unix = 2;
+}
+
+message PullStateRequest {
+  string source_node_id = 1;
+  int64 since_unix = 2;
+}
+
+message PullStateResponse {
+  repeated ServiceRecord records = 1;
+  repeated NodeInfo peers = 2;
+}
+
+service ServiceRegistry {
+  rpc RegisterService(RegisterServiceRequest) returns (RegisterServiceResponse);
+  rpc DeregisterService(DeregisterServiceRequest) returns (DeregisterServiceResponse);
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+  rpc GetService(GetServiceRequest) returns (GetServiceResponse);
+  rpc ListServices(ListServicesRequest) returns (ListServicesResponse);
+}
+
+service RegistryPeer {
+  rpc JoinCluster(JoinClusterRequest) returns (JoinClusterResponse);
+  rpc GossipSync(GossipSyncRequest) returns (GossipSyncResponse);
+  rpc PullState(PullStateRequest) returns (PullStateResponse);
+}
+
