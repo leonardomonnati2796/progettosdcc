@@ -42,10 +42,12 @@ type serviceRegistryClient struct {
 }
 
 func NewServiceRegistryClient(cc grpc.ClientConnInterface) ServiceRegistryClient {
+	// Crea un nuovo service registry client.
 	return &serviceRegistryClient{cc}
 }
 
 func (c *serviceRegistryClient) RegisterService(ctx context.Context, in *RegisterServiceRequest, opts ...grpc.CallOption) (*RegisterServiceResponse, error) {
+	// Registra service.
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RegisterServiceResponse)
 	err := c.cc.Invoke(ctx, ServiceRegistry_RegisterService_FullMethodName, in, out, cOpts...)
@@ -56,6 +58,7 @@ func (c *serviceRegistryClient) RegisterService(ctx context.Context, in *Registe
 }
 
 func (c *serviceRegistryClient) DeregisterService(ctx context.Context, in *DeregisterServiceRequest, opts ...grpc.CallOption) (*DeregisterServiceResponse, error) {
+	// Deregistra service.
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DeregisterServiceResponse)
 	err := c.cc.Invoke(ctx, ServiceRegistry_DeregisterService_FullMethodName, in, out, cOpts...)
@@ -66,6 +69,7 @@ func (c *serviceRegistryClient) DeregisterService(ctx context.Context, in *Dereg
 }
 
 func (c *serviceRegistryClient) Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error) {
+	// Gestisce il heartbeat del servizio.
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(HeartbeatResponse)
 	err := c.cc.Invoke(ctx, ServiceRegistry_Heartbeat_FullMethodName, in, out, cOpts...)
@@ -76,6 +80,7 @@ func (c *serviceRegistryClient) Heartbeat(ctx context.Context, in *HeartbeatRequ
 }
 
 func (c *serviceRegistryClient) GetService(ctx context.Context, in *GetServiceRequest, opts ...grpc.CallOption) (*GetServiceResponse, error) {
+	// Recupera service.
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetServiceResponse)
 	err := c.cc.Invoke(ctx, ServiceRegistry_GetService_FullMethodName, in, out, cOpts...)
@@ -86,6 +91,7 @@ func (c *serviceRegistryClient) GetService(ctx context.Context, in *GetServiceRe
 }
 
 func (c *serviceRegistryClient) ListServices(ctx context.Context, in *ListServicesRequest, opts ...grpc.CallOption) (*ListServicesResponse, error) {
+	// Elenca services.
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListServicesResponse)
 	err := c.cc.Invoke(ctx, ServiceRegistry_ListServices_FullMethodName, in, out, cOpts...)
@@ -115,22 +121,31 @@ type ServiceRegistryServer interface {
 type UnimplementedServiceRegistryServer struct{}
 
 func (UnimplementedServiceRegistryServer) RegisterService(context.Context, *RegisterServiceRequest) (*RegisterServiceResponse, error) {
+	// Registra service.
 	return nil, status.Errorf(codes.Unimplemented, "method RegisterService not implemented")
 }
 func (UnimplementedServiceRegistryServer) DeregisterService(context.Context, *DeregisterServiceRequest) (*DeregisterServiceResponse, error) {
+	// Deregistra service.
 	return nil, status.Errorf(codes.Unimplemented, "method DeregisterService not implemented")
 }
 func (UnimplementedServiceRegistryServer) Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error) {
+	// Gestisce il heartbeat del servizio.
 	return nil, status.Errorf(codes.Unimplemented, "method Heartbeat not implemented")
 }
 func (UnimplementedServiceRegistryServer) GetService(context.Context, *GetServiceRequest) (*GetServiceResponse, error) {
+	// Recupera service.
 	return nil, status.Errorf(codes.Unimplemented, "method GetService not implemented")
 }
 func (UnimplementedServiceRegistryServer) ListServices(context.Context, *ListServicesRequest) (*ListServicesResponse, error) {
+	// Elenca services.
 	return nil, status.Errorf(codes.Unimplemented, "method ListServices not implemented")
 }
 func (UnimplementedServiceRegistryServer) mustEmbedUnimplementedServiceRegistryServer() {}
-func (UnimplementedServiceRegistryServer) testEmbeddedByValue()                         {}
+
+// Esegue la logica di must embed unimplemented service registry server.
+func (UnimplementedServiceRegistryServer) testEmbeddedByValue() {}
+
+// Esegue il test per embedded by value.
 
 // UnsafeServiceRegistryServer may be embedded to opt out of forward compatibility for this service.
 // Use of this interface is not recommended, as added methods to ServiceRegistryServer will
@@ -140,6 +155,7 @@ type UnsafeServiceRegistryServer interface {
 }
 
 func RegisterServiceRegistryServer(s grpc.ServiceRegistrar, srv ServiceRegistryServer) {
+	// Registra service registry server.
 	// If the following call pancis, it indicates UnimplementedServiceRegistryServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
@@ -151,6 +167,7 @@ func RegisterServiceRegistryServer(s grpc.ServiceRegistrar, srv ServiceRegistryS
 }
 
 func _ServiceRegistry_RegisterService_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	// Esegue la logica di service registry register service handler.
 	in := new(RegisterServiceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -169,6 +186,7 @@ func _ServiceRegistry_RegisterService_Handler(srv interface{}, ctx context.Conte
 }
 
 func _ServiceRegistry_DeregisterService_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	// Esegue la logica di service registry deregister service handler.
 	in := new(DeregisterServiceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -187,6 +205,7 @@ func _ServiceRegistry_DeregisterService_Handler(srv interface{}, ctx context.Con
 }
 
 func _ServiceRegistry_Heartbeat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	// Esegue la logica di service registry heartbeat handler.
 	in := new(HeartbeatRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -205,6 +224,7 @@ func _ServiceRegistry_Heartbeat_Handler(srv interface{}, ctx context.Context, de
 }
 
 func _ServiceRegistry_GetService_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	// Esegue la logica di service registry get service handler.
 	in := new(GetServiceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -223,6 +243,7 @@ func _ServiceRegistry_GetService_Handler(srv interface{}, ctx context.Context, d
 }
 
 func _ServiceRegistry_ListServices_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	// Esegue la logica di service registry list services handler.
 	in := new(ListServicesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -292,10 +313,12 @@ type registryPeerClient struct {
 }
 
 func NewRegistryPeerClient(cc grpc.ClientConnInterface) RegistryPeerClient {
+	// Crea un nuovo registry peer client.
 	return &registryPeerClient{cc}
 }
 
 func (c *registryPeerClient) JoinCluster(ctx context.Context, in *JoinClusterRequest, opts ...grpc.CallOption) (*JoinClusterResponse, error) {
+	// Unisce il nodo al cluster.
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(JoinClusterResponse)
 	err := c.cc.Invoke(ctx, RegistryPeer_JoinCluster_FullMethodName, in, out, cOpts...)
@@ -306,6 +329,7 @@ func (c *registryPeerClient) JoinCluster(ctx context.Context, in *JoinClusterReq
 }
 
 func (c *registryPeerClient) GossipSync(ctx context.Context, in *GossipSyncRequest, opts ...grpc.CallOption) (*GossipSyncResponse, error) {
+	// Gestisce la propagazione gossip tra i nodi.
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GossipSyncResponse)
 	err := c.cc.Invoke(ctx, RegistryPeer_GossipSync_FullMethodName, in, out, cOpts...)
@@ -316,6 +340,7 @@ func (c *registryPeerClient) GossipSync(ctx context.Context, in *GossipSyncReque
 }
 
 func (c *registryPeerClient) PullState(ctx context.Context, in *PullStateRequest, opts ...grpc.CallOption) (*PullStateResponse, error) {
+	// Esegue la logica di pull state.
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(PullStateResponse)
 	err := c.cc.Invoke(ctx, RegistryPeer_PullState_FullMethodName, in, out, cOpts...)
@@ -343,16 +368,23 @@ type RegistryPeerServer interface {
 type UnimplementedRegistryPeerServer struct{}
 
 func (UnimplementedRegistryPeerServer) JoinCluster(context.Context, *JoinClusterRequest) (*JoinClusterResponse, error) {
+	// Unisce il nodo al cluster.
 	return nil, status.Errorf(codes.Unimplemented, "method JoinCluster not implemented")
 }
 func (UnimplementedRegistryPeerServer) GossipSync(context.Context, *GossipSyncRequest) (*GossipSyncResponse, error) {
+	// Gestisce la propagazione gossip tra i nodi.
 	return nil, status.Errorf(codes.Unimplemented, "method GossipSync not implemented")
 }
 func (UnimplementedRegistryPeerServer) PullState(context.Context, *PullStateRequest) (*PullStateResponse, error) {
+	// Esegue la logica di pull state.
 	return nil, status.Errorf(codes.Unimplemented, "method PullState not implemented")
 }
 func (UnimplementedRegistryPeerServer) mustEmbedUnimplementedRegistryPeerServer() {}
-func (UnimplementedRegistryPeerServer) testEmbeddedByValue()                      {}
+
+// Esegue la logica di must embed unimplemented registry peer server.
+func (UnimplementedRegistryPeerServer) testEmbeddedByValue() {}
+
+// Esegue il test per embedded by value.
 
 // UnsafeRegistryPeerServer may be embedded to opt out of forward compatibility for this service.
 // Use of this interface is not recommended, as added methods to RegistryPeerServer will
@@ -362,6 +394,7 @@ type UnsafeRegistryPeerServer interface {
 }
 
 func RegisterRegistryPeerServer(s grpc.ServiceRegistrar, srv RegistryPeerServer) {
+	// Registra registry peer server.
 	// If the following call pancis, it indicates UnimplementedRegistryPeerServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
@@ -373,6 +406,7 @@ func RegisterRegistryPeerServer(s grpc.ServiceRegistrar, srv RegistryPeerServer)
 }
 
 func _RegistryPeer_JoinCluster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	// Esegue la logica di registry peer join cluster handler.
 	in := new(JoinClusterRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -391,6 +425,7 @@ func _RegistryPeer_JoinCluster_Handler(srv interface{}, ctx context.Context, dec
 }
 
 func _RegistryPeer_GossipSync_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	// Esegue la logica di registry peer gossip sync handler.
 	in := new(GossipSyncRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -409,6 +444,7 @@ func _RegistryPeer_GossipSync_Handler(srv interface{}, ctx context.Context, dec 
 }
 
 func _RegistryPeer_PullState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	// Esegue la logica di registry peer pull state handler.
 	in := new(PullStateRequest)
 	if err := dec(in); err != nil {
 		return nil, err

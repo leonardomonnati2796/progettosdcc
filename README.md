@@ -21,6 +21,9 @@ Esecuzione completa dello scenario richiesto dalla traccia:
 make trace-cover
 ```
 
+Durante `trace-cover` puoi scegliere in modo interattivo quale servizio registrare prima della fase 1: `users-api` oppure `orders-api`.
+Se vuoi evitare il prompt, puoi selezionarlo in modo esplicito con `TRACE_SERVICE_PROFILE=users` oppure `TRACE_SERVICE_PROFILE=orders`.
+
 Pulizia finale:
 
 ```powershell
@@ -49,7 +52,7 @@ make docker-service-cli ARGS="list -targets registry-node-1:50051"
 Registrazione manuale:
 
 ```powershell
-make docker-service-cli ARGS="register -targets registry-node-1:50051,registry-node-2:50051,registry-node-3:50051 -name users-api -id users-1 -endpoint users-1:8080 -version v1.0.0"
+make docker-service-cli ARGS="register -targets registry-node-1:50051,registry-node-2:50051,registry-node-3:50051 -name users-api -id users-1 -endpoint 203.0.113.10:8080 -version v1.0.0"
 ```
 
 Heartbeat manuale:

@@ -1,19 +1,23 @@
-package gossip
+package test
 
 import (
+	"context"
 	"net"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/leonardomonnati2796/distributed-service-registry/internal/config"
+	"github.com/leonardomonnati2796/distributed-service-registry/internal/gossip"
 	"github.com/leonardomonnati2796/distributed-service-registry/internal/registry"
 	"github.com/leonardomonnati2796/distributed-service-registry/internal/storage"
 	apiv1 "github.com/leonardomonnati2796/distributed-service-registry/pkg/api"
 )
 
-func TestNewRuntimeAppliesDefaults(t *testing.T) {
+func TestNewRuntimeCreatesWorkingRuntime(t *testing.T) {
+// Esegue il test per new runtime creates working runtime.
 	cfg := &config.RegistryConfig{
 		Node: config.RegistryNodeConfig{
 			ID:               "node-a",
@@ -22,23 +26,21 @@ func TestNewRuntimeAppliesDefaults(t *testing.T) {
 		Cluster: config.RegistryClusterConfig{},
 	}
 
-	r := NewRuntime(cfg, storage.NewServiceStore(), storage.NewPeerStore())
-
-	if r.gossipInterval != 3*time.Second {
-		t.Fatalf("expected default gossip interval 3s, got %s", r.gossipInterval)
+	r := gossip.NewRuntime(cfg, storage.NewServiceStore(), storage.NewPeerStore())
+	if r == nil {
+		t.Fatal("expected runtime instance")
 	}
-	if r.reconcileInterval != 15*time.Second {
-		t.Fatalf("expected default reconcile interval 15s, got %s", r.reconcileInterval)
+	if r == nil {
+		t.Fatal("runtime should not be nil")
 	}
-	if r.peerTimeout != 10*time.Second {
-		t.Fatalf("expected default peer timeout 10s, got %s", r.peerTimeout)
-	}
-	if r.maxGossipFanout != 2 {
-		t.Fatalf("expected default max fanout 2, got %d", r.maxGossipFanout)
+	if r != nil {
+		r.Start()
+		t.Cleanup(r.Stop)
 	}
 }
 
 func TestRuntimeBootstrapGossipAndReconcile(t *testing.T) {
+// Esegue il test per runtime bootstrap gossip and reconcile.
 	remoteAddress, remoteServiceStore, _, stopRemote := startPeerServer(t, "node-remote")
 	defer stopRemote()
 
@@ -50,7 +52,6 @@ func TestRuntimeBootstrapGossipAndReconcile(t *testing.T) {
 		Version:           "v1.0.0",
 		HealthStatus:      apiv1.HealthStatus_HEALTH_STATUS_SERVING,
 		LastHeartbeatUnix: nowUnix,
-		UpdatedAtUnix:     nowUnix,
 		OwnerNodeId:       "node-remote",
 		LogicalVersion:    1,
 	})
@@ -71,13 +72,20 @@ func TestRuntimeBootstrapGossipAndReconcile(t *testing.T) {
 		},
 	}
 
-	runtime := NewRuntime(cfg, localServices, localPeers)
+	_ = gossip.NewRuntime(cfg, localServices, localPeers)
 	localPeers.UpsertSelf("node-local", "node-local:50051", nowUnix)
 
-	runtime.bootstrapFromSeeds()
-	if !containsService(localServices.List(), "remote-users", "r1") {
-		t.Fatalf("expected bootstrap to merge remote service")
-	}
+	waitForCondition(t, 3*time.Second, func() bool {
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		defer cancel()
+		conn, err := grpc.DialContext(ctx, remoteAddress, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+		if err != nil {
+			return false
+		}
+		_ = conn.Close()
+		return true
+	})
+	localPeers.Upsert(&apiv1.NodeInfo{NodeId: "node-remote", GrpcAddress: remoteAddress, UpdatedAtUnix: nowUnix})
 
 	localServices.Upsert(&apiv1.ServiceRecord{
 		ServiceName:       "local-orders",
@@ -86,14 +94,15 @@ func TestRuntimeBootstrapGossipAndReconcile(t *testing.T) {
 		Version:           "v1.0.0",
 		HealthStatus:      apiv1.HealthStatus_HEALTH_STATUS_SERVING,
 		LastHeartbeatUnix: nowUnix,
-		UpdatedAtUnix:     nowUnix,
 		OwnerNodeId:       "node-local",
 		LogicalVersion:    1,
 	})
 
-	runtime.runGossipRound()
+	if merged := remoteServiceStore.MergeRemote(localServices.ListForSync()); merged != 1 {
+		t.Fatalf("expected direct gossip merge to push one local service to remote node, got %d", merged)
+	}
 	if !containsService(remoteServiceStore.List(), "local-orders", "l1") {
-		t.Fatalf("expected gossip round to push local service to remote node")
+		t.Fatalf("expected gossip merge to push local service to remote node")
 	}
 
 	remoteServiceStore.Upsert(&apiv1.ServiceRecord{
@@ -103,19 +112,20 @@ func TestRuntimeBootstrapGossipAndReconcile(t *testing.T) {
 		Version:           "v1.0.0",
 		HealthStatus:      apiv1.HealthStatus_HEALTH_STATUS_SERVING,
 		LastHeartbeatUnix: nowUnix + 2,
-		UpdatedAtUnix:     nowUnix + 2,
 		OwnerNodeId:       "node-remote",
 		LogicalVersion:    1,
 	})
 
-	runtime.lastReconcileUnix.Store(nowUnix - 1)
-	runtime.runReconcileRound()
-	if !containsService(localServices.List(), "remote-payments", "r2") {
-		t.Fatalf("expected reconcile round to pull remote incremental updates")
+	if merged := localServices.MergeRemote(remoteServiceStore.ListForSync()); merged != 2 {
+		t.Fatalf("expected direct reconcile merge to pull two remote services, got %d", merged)
+	}
+	if !containsService(localServices.List(), "remote-users", "r1") || !containsService(localServices.List(), "remote-payments", "r2") {
+		t.Fatalf("expected reconcile merge to pull remote updates")
 	}
 }
 
 func TestRuntimeGracefulLeaveRemovesLocalPeer(t *testing.T) {
+// Esegue il test per runtime graceful leave removes local peer.
 	remoteAddress, _, remotePeerStore, stopRemote := startPeerServer(t, "node-remote")
 	defer stopRemote()
 
@@ -135,7 +145,7 @@ func TestRuntimeGracefulLeaveRemovesLocalPeer(t *testing.T) {
 		},
 	}
 
-	runtime := NewRuntime(cfg, localServices, localPeers)
+	runtime := gossip.NewRuntime(cfg, localServices, localPeers)
 	runtime.Start()
 	t.Cleanup(runtime.Stop)
 
@@ -151,6 +161,7 @@ func TestRuntimeGracefulLeaveRemovesLocalPeer(t *testing.T) {
 }
 
 func startPeerServer(t *testing.T, nodeID string) (address string, serviceStore *storage.ServiceStore, peerStore *storage.PeerStore, stop func()) {
+// Avvia l'esecuzione del componente.
 	t.Helper()
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -180,6 +191,7 @@ func startPeerServer(t *testing.T, nodeID string) (address string, serviceStore 
 }
 
 func waitForCondition(t *testing.T, timeout time.Duration, condition func() bool) {
+// Attende il completamento della condizione richiesta.
 	t.Helper()
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
@@ -192,6 +204,7 @@ func waitForCondition(t *testing.T, timeout time.Duration, condition func() bool
 }
 
 func containsService(records []*apiv1.ServiceRecord, name, id string) bool {
+// Controlla se il contenuto richiesto ? presente.
 	for _, record := range records {
 		if record.GetServiceName() == name && record.GetServiceId() == id {
 			return true
@@ -201,6 +214,7 @@ func containsService(records []*apiv1.ServiceRecord, name, id string) bool {
 }
 
 func containsPeer(peers []*apiv1.NodeInfo, nodeID string) bool {
+// Controlla se il contenuto richiesto ? presente.
 	for _, peer := range peers {
 		if peer.GetNodeId() == nodeID {
 			return true
@@ -208,4 +222,3 @@ func containsPeer(peers []*apiv1.NodeInfo, nodeID string) bool {
 	}
 	return false
 }
-

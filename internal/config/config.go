@@ -25,6 +25,8 @@ type RegistryNodeConfig struct {
 type RegistryClusterConfig struct {
 	SeedPeers                []string `yaml:"seed_peers"`
 	GossipIntervalSeconds    int      `yaml:"gossip_interval_seconds"`
+	GossipStartDelaySeconds  int      `yaml:"gossip_start_delay_seconds"`
+	GossipGatePath           string   `yaml:"gossip_gate_path"`
 	ReconcileIntervalSeconds int      `yaml:"reconcile_interval_seconds"`
 	PeerTimeoutSeconds       int      `yaml:"peer_timeout_seconds"`
 	MaxGossipFanout          int      `yaml:"max_gossip_fanout"`
@@ -53,6 +55,7 @@ type DemoServiceRegistryConfig struct {
 }
 
 func LoadRegistryConfig(path string) (*RegistryConfig, error) {
+	// Carica registry config.
 	var cfg RegistryConfig
 	if err := readYAML(path, &cfg); err != nil {
 		return nil, err
@@ -64,6 +67,7 @@ func LoadRegistryConfig(path string) (*RegistryConfig, error) {
 }
 
 func LoadDemoServiceConfig(path string) (*DemoServiceConfig, error) {
+	// Carica demo service config.
 	var cfg DemoServiceConfig
 	if err := readYAML(path, &cfg); err != nil {
 		return nil, err
@@ -75,6 +79,7 @@ func LoadDemoServiceConfig(path string) (*DemoServiceConfig, error) {
 }
 
 func (c *RegistryConfig) Validate() error {
+	// Esegue la logica di validate.
 	if c == nil {
 		return errors.New("registry config is nil")
 	}
@@ -106,6 +111,7 @@ func (c *RegistryConfig) Validate() error {
 }
 
 func (c *DemoServiceConfig) Validate() error {
+	// Esegue la logica di validate.
 	if c == nil {
 		return errors.New("demo service config is nil")
 	}
@@ -136,6 +142,7 @@ func (c *DemoServiceConfig) Validate() error {
 }
 
 func readYAML(path string, out any) error {
+	// Esegue la logica di read yaml.
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("read config %q: %w", path, err)

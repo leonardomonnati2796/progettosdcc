@@ -23,6 +23,7 @@ type RegistryPeerServer struct {
 }
 
 func NewRegistryPeerServer(store *storage.ServiceStore, peerStore *storage.PeerStore, nodeID string, advertiseAddress string) *RegistryPeerServer {
+	// Crea un nuovo registry peer server.
 	if peerStore == nil {
 		peerStore = storage.NewPeerStore()
 	}
@@ -36,6 +37,7 @@ func NewRegistryPeerServer(store *storage.ServiceStore, peerStore *storage.PeerS
 }
 
 func (s *RegistryPeerServer) JoinCluster(_ context.Context, req *apiv1.JoinClusterRequest) (*apiv1.JoinClusterResponse, error) {
+	// Unisce il nodo al cluster.
 	if req == nil || req.GetNode() == nil {
 		return nil, status.Error(codes.InvalidArgument, "node is required")
 	}
@@ -60,6 +62,7 @@ func (s *RegistryPeerServer) JoinCluster(_ context.Context, req *apiv1.JoinClust
 }
 
 func (s *RegistryPeerServer) GossipSync(_ context.Context, req *apiv1.GossipSyncRequest) (*apiv1.GossipSyncResponse, error) {
+	// Gestisce la propagazione gossip tra i nodi.
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "request is required")
 	}
@@ -76,6 +79,7 @@ func (s *RegistryPeerServer) GossipSync(_ context.Context, req *apiv1.GossipSync
 }
 
 func (s *RegistryPeerServer) LeaveCluster(_ context.Context, req *apiv1.JoinClusterRequest) (*apiv1.GossipSyncResponse, error) {
+	// Esegue la logica di leave cluster.
 	if req == nil || req.GetNode() == nil {
 		return nil, status.Error(codes.InvalidArgument, "node is required")
 	}
@@ -93,6 +97,7 @@ func (s *RegistryPeerServer) LeaveCluster(_ context.Context, req *apiv1.JoinClus
 }
 
 func (s *RegistryPeerServer) PullState(_ context.Context, req *apiv1.PullStateRequest) (*apiv1.PullStateResponse, error) {
+	// Esegue la logica di pull state.
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "request is required")
 	}
@@ -106,4 +111,3 @@ func (s *RegistryPeerServer) PullState(_ context.Context, req *apiv1.PullStateRe
 		Peers:   s.peerStore.ListSince(sinceUnix),
 	}, nil
 }
-

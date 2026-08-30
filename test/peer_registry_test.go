@@ -1,21 +1,19 @@
-package registry
+package test
 
 import (
 	"context"
 	"testing"
-	"time"
 
+	"github.com/leonardomonnati2796/distributed-service-registry/internal/registry"
 	"github.com/leonardomonnati2796/distributed-service-registry/internal/storage"
 	apiv1 "github.com/leonardomonnati2796/distributed-service-registry/pkg/api"
 )
 
 func TestRegistryPeerServerJoinAndGossipMerge(t *testing.T) {
+// Esegue il test per registry peer server join and gossip merge.
 	serviceStore := storage.NewServiceStore()
 	peerStore := storage.NewPeerStore()
-	server := NewRegistryPeerServer(serviceStore, peerStore, "node-a", "node-a:50051")
-
-	now := int64(100)
-	server.now = func() time.Time { return time.Unix(now, 0) }
+	server := registry.NewRegistryPeerServer(serviceStore, peerStore, "node-a", "node-a:50051")
 
 	joinResp, err := server.JoinCluster(context.Background(), &apiv1.JoinClusterRequest{
 		Node: &apiv1.NodeInfo{NodeId: "node-b", GrpcAddress: "node-b:50051"},
@@ -27,7 +25,6 @@ func TestRegistryPeerServerJoinAndGossipMerge(t *testing.T) {
 		t.Fatalf("expected 2 peers after join, got %d", len(joinResp.GetPeers()))
 	}
 
-	now = 101
 	gossipResp, err := server.GossipSync(context.Background(), &apiv1.GossipSyncRequest{
 		SourceNodeId: "node-b",
 		Records: []*apiv1.ServiceRecord{
@@ -38,7 +35,6 @@ func TestRegistryPeerServerJoinAndGossipMerge(t *testing.T) {
 				Version:           "v1",
 				HealthStatus:      apiv1.HealthStatus_HEALTH_STATUS_SERVING,
 				LastHeartbeatUnix: 101,
-				UpdatedAtUnix:     101,
 				OwnerNodeId:       "node-b",
 				LogicalVersion:    1,
 			},
@@ -71,11 +67,11 @@ func TestRegistryPeerServerJoinAndGossipMerge(t *testing.T) {
 }
 
 func TestRegistryPeerServerLeaveCluster(t *testing.T) {
+// Esegue il test per registry peer server leave cluster.
 	serviceStore := storage.NewServiceStore()
 	peerStore := storage.NewPeerStore()
-	server := NewRegistryPeerServer(serviceStore, peerStore, "node-a", "node-a:50051")
+	server := registry.NewRegistryPeerServer(serviceStore, peerStore, "node-a", "node-a:50051")
 
-	server.now = func() time.Time { return time.Unix(200, 0) }
 	peerStore.UpsertSelf("node-a", "node-a:50051", 200)
 	peerStore.Upsert(&apiv1.NodeInfo{NodeId: "node-b", GrpcAddress: "node-b:50051", UpdatedAtUnix: 200})
 
@@ -97,4 +93,3 @@ func TestRegistryPeerServerLeaveCluster(t *testing.T) {
 		t.Fatalf("expected node-b to be removed from peer store")
 	}
 }
-

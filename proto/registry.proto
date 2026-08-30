@@ -18,7 +18,6 @@ message ServiceRecord {
   string version = 4;
   HealthStatus health_status = 5;
   int64 last_heartbeat_unix = 6;
-  int64 updated_at_unix = 7;
   string owner_node_id = 8;
   uint64 logical_version = 9;
 }

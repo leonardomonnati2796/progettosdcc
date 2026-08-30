@@ -1,7 +1,7 @@
 //go:build integration
 // +build integration
 
-package integration
+package test
 
 import (
 	"context"
@@ -36,17 +36,17 @@ type testNode struct {
 }
 
 func startTestNode(t *testing.T, id string, seedPeers []string) *testNode {
-	// Avvia l'esecuzione del componente.
+// Avvia l'esecuzione del componente.
 	return startTestNodeWithPersistenceAndPeerTimeout(t, id, seedPeers, "", 2)
 }
 
 func startTestNodeWithPersistence(t *testing.T, id string, seedPeers []string, storageDir string) *testNode {
-	// Avvia l'esecuzione del componente.
+// Avvia l'esecuzione del componente.
 	return startTestNodeWithPersistenceAndPeerTimeout(t, id, seedPeers, storageDir, 2)
 }
 
 func startTestNodeWithPersistenceAndPeerTimeout(t *testing.T, id string, seedPeers []string, storageDir string, peerTimeoutSeconds int) *testNode {
-	// Avvia l'esecuzione del componente.
+// Avvia l'esecuzione del componente.
 	t.Helper()
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -124,7 +124,7 @@ func startTestNodeWithPersistenceAndPeerTimeout(t *testing.T, id string, seedPee
 }
 
 func (n *testNode) Stop() {
-	// Arresta l'esecuzione corrente.
+// Arresta l'esecuzione corrente.
 	n.stopOnce.Do(func() {
 		close(n.serveStopCh)
 		if n.gossip != nil {
@@ -140,7 +140,7 @@ func (n *testNode) Stop() {
 }
 
 func TestMultiNodeGossipConvergenceAndPeerPruning(t *testing.T) {
-	// Esegue il test per multi node gossip convergence and peer pruning.
+// Esegue il test per multi node gossip convergence and peer pruning.
 	nodeA := startTestNode(t, "node-a", nil)
 	defer nodeA.Stop()
 
@@ -182,7 +182,7 @@ func TestMultiNodeGossipConvergenceAndPeerPruning(t *testing.T) {
 }
 
 func TestCrashResumeAndStateRealignment(t *testing.T) {
-	// Esegue il test per crash resume and state realignment.
+// Esegue il test per crash resume and state realignment.
 	nodeA := startTestNode(t, "node-a", nil)
 	defer nodeA.Stop()
 
@@ -246,7 +246,7 @@ func TestCrashResumeAndStateRealignment(t *testing.T) {
 }
 
 func TestDeregisterConvergesAcrossNodes(t *testing.T) {
-	// Esegue il test per deregister converges across nodes.
+// Esegue il test per deregister converges across nodes.
 	nodeA := startTestNode(t, "node-a", nil)
 	defer nodeA.Stop()
 
@@ -279,7 +279,7 @@ func TestDeregisterConvergesAcrossNodes(t *testing.T) {
 }
 
 func TestGracefulLeaveConvergesWithoutPeerTimeout(t *testing.T) {
-	// Esegue il test per graceful leave converges without peer timeout.
+// Esegue il test per graceful leave converges without peer timeout.
 	nodeA := startTestNodeWithPersistenceAndPeerTimeout(t, "node-a", nil, "", 30)
 	defer nodeA.Stop()
 
@@ -299,7 +299,7 @@ func TestGracefulLeaveConvergesWithoutPeerTimeout(t *testing.T) {
 }
 
 func registerService(address string, record *apiv1.ServiceRecord) error {
-	// Registra service.
+// Registra service.
 	return withServiceClient(address, func(client apiv1.ServiceRegistryClient) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
@@ -316,7 +316,7 @@ func registerService(address string, record *apiv1.ServiceRecord) error {
 }
 
 func deregisterService(address, serviceName, serviceID string) error {
-	// Deregistra service.
+// Deregistra service.
 	return withServiceClient(address, func(client apiv1.ServiceRegistryClient) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
@@ -336,7 +336,7 @@ func deregisterService(address, serviceName, serviceID string) error {
 }
 
 func withServiceClient(address string, fn func(client apiv1.ServiceRegistryClient) error) error {
-	// Esegue la logica di with service client.
+// Esegue la logica di with service client.
 	dialCtx, dialCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	conn, err := grpc.DialContext(dialCtx, address, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	dialCancel()
@@ -349,7 +349,7 @@ func withServiceClient(address string, fn func(client apiv1.ServiceRegistryClien
 }
 
 func waitFor(t *testing.T, timeout time.Duration, message string, condition func() bool) {
-	// Attende il completamento della condizione richiesta.
+// Attende il completamento della condizione richiesta.
 	t.Helper()
 
 	deadline := time.Now().Add(timeout)
@@ -363,7 +363,7 @@ func waitFor(t *testing.T, timeout time.Duration, message string, condition func
 }
 
 func hasPeer(peers []*apiv1.NodeInfo, nodeID string) bool {
-	// Controlla la presenza del valore richiesto.
+// Controlla la presenza del valore richiesto.
 	for _, peer := range peers {
 		if peer.GetNodeId() == nodeID {
 			return true
@@ -372,10 +372,10 @@ func hasPeer(peers []*apiv1.NodeInfo, nodeID string) bool {
 	return false
 }
 
-func hasService(records []*apiv1.ServiceRecord, serviceName, serviceID string) bool {
-	// Controlla la presenza del valore richiesto.
+func hasService(records []*apiv1.ServiceRecord, name, id string) bool {
+// Controlla la presenza del valore richiesto.
 	for _, record := range records {
-		if record.GetServiceName() == serviceName && record.GetServiceId() == serviceID {
+		if record.GetServiceName() == name && record.GetServiceId() == id {
 			return true
 		}
 	}

@@ -15,10 +15,12 @@ type RegistryPeerControlServer interface {
 }
 
 func RegisterRegistryPeerControlServer(s grpc.ServiceRegistrar, srv RegistryPeerControlServer) {
+	// Registra registry peer control server.
 	s.RegisterService(&RegistryPeerControl_ServiceDesc, srv)
 }
 
 func _RegistryPeerControl_LeaveCluster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, _ grpc.UnaryServerInterceptor) (interface{}, error) {
+	// Esegue la logica di registry peer control leave cluster handler.
 	in := new(apiv1.JoinClusterRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -38,4 +40,3 @@ var RegistryPeerControl_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "registry.proto",
 }
-

@@ -20,6 +20,7 @@ type PeerStore struct {
 }
 
 func NewPeerStore() *PeerStore {
+	// Crea un nuovo peer store.
 	return &PeerStore{
 		peers: make(map[string]*apiv1.NodeInfo),
 		rng:   rand.New(rand.NewSource(time.Now().UnixNano())),
@@ -27,12 +28,14 @@ func NewPeerStore() *PeerStore {
 }
 
 func (s *PeerStore) SetOnChange(onChange func()) {
+	// Imposta on change.
 	s.mu.Lock()
 	s.onChange = onChange
 	s.mu.Unlock()
 }
 
 func (s *PeerStore) ReplaceAll(peers []*apiv1.NodeInfo) {
+	// Esegue la logica di replace all.
 	replaced := make(map[string]*apiv1.NodeInfo, len(peers))
 	for _, peer := range peers {
 		if peer == nil {
@@ -56,6 +59,7 @@ func (s *PeerStore) ReplaceAll(peers []*apiv1.NodeInfo) {
 }
 
 func (s *PeerStore) Upsert(peer *apiv1.NodeInfo) bool {
+	// Esegue la logica di upsert.
 	if peer == nil {
 		return false
 	}
@@ -89,6 +93,7 @@ func (s *PeerStore) Upsert(peer *apiv1.NodeInfo) bool {
 }
 
 func (s *PeerStore) UpsertSelf(nodeID, grpcAddress string, nowUnix int64) {
+	// Esegue la logica di upsert self.
 	if nowUnix == 0 {
 		nowUnix = time.Now().Unix()
 	}
@@ -100,6 +105,7 @@ func (s *PeerStore) UpsertSelf(nodeID, grpcAddress string, nowUnix int64) {
 }
 
 func (s *PeerStore) MergeRemote(peers []*apiv1.NodeInfo) int {
+	// Esegue la logica di merge remote.
 	updated := 0
 	for _, peer := range peers {
 		if s.Upsert(peer) {
@@ -110,6 +116,7 @@ func (s *PeerStore) MergeRemote(peers []*apiv1.NodeInfo) int {
 }
 
 func (s *PeerStore) Remove(nodeID string) bool {
+	// Rimuove esegue la logica della funzione..
 	nodeID = strings.TrimSpace(nodeID)
 	if nodeID == "" {
 		return false
@@ -128,6 +135,7 @@ func (s *PeerStore) Remove(nodeID string) bool {
 }
 
 func (s *PeerStore) List() []*apiv1.NodeInfo {
+	// Elenca esegue la logica della funzione..
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -140,6 +148,7 @@ func (s *PeerStore) List() []*apiv1.NodeInfo {
 }
 
 func (s *PeerStore) ListSince(sinceUnix int64) []*apiv1.NodeInfo {
+	// Elenca since.
 	if sinceUnix <= 0 {
 		return s.List()
 	}
@@ -159,6 +168,7 @@ func (s *PeerStore) ListSince(sinceUnix int64) []*apiv1.NodeInfo {
 }
 
 func (s *PeerStore) RemoveStale(nowUnix int64, peerTimeoutSeconds int64, protectedIDs map[string]struct{}) int {
+	// Rimuove stale.
 	if peerTimeoutSeconds <= 0 {
 		return 0
 	}
@@ -187,6 +197,7 @@ func (s *PeerStore) RemoveStale(nowUnix int64, peerTimeoutSeconds int64, protect
 }
 
 func (s *PeerStore) RandomPeers(max int, excludeIDs map[string]struct{}) []*apiv1.NodeInfo {
+	// Esegue la logica di random peers.
 	if max <= 0 {
 		return nil
 	}
@@ -219,6 +230,7 @@ func (s *PeerStore) RandomPeers(max int, excludeIDs map[string]struct{}) []*apiv
 }
 
 func shouldReplacePeer(current, incoming *apiv1.NodeInfo) bool {
+	// Esegue la logica di should replace peer.
 	if incoming.GetUpdatedAtUnix() != current.GetUpdatedAtUnix() {
 		return incoming.GetUpdatedAtUnix() > current.GetUpdatedAtUnix()
 	}
@@ -229,6 +241,7 @@ func shouldReplacePeer(current, incoming *apiv1.NodeInfo) bool {
 }
 
 func clonePeer(peer *apiv1.NodeInfo) *apiv1.NodeInfo {
+	// Esegue la logica di clone peer.
 	if peer == nil {
 		return nil
 	}
@@ -240,6 +253,7 @@ func clonePeer(peer *apiv1.NodeInfo) *apiv1.NodeInfo {
 }
 
 func sortPeers(peers []*apiv1.NodeInfo) {
+	// Esegue la logica di sort peers.
 	sort.Slice(peers, func(i, j int) bool {
 		if peers[i].GetNodeId() == peers[j].GetNodeId() {
 			return peers[i].GetGrpcAddress() < peers[j].GetGrpcAddress()
@@ -249,6 +263,7 @@ func sortPeers(peers []*apiv1.NodeInfo) {
 }
 
 func (s *PeerStore) emitChange() {
+	// Esegue la logica di emit change.
 	s.mu.RLock()
 	onChange := s.onChange
 	s.mu.RUnlock()
@@ -256,4 +271,3 @@ func (s *PeerStore) emitChange() {
 		onChange()
 	}
 }
-

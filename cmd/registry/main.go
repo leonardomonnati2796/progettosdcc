@@ -20,6 +20,7 @@ import (
 )
 
 func main() {
+	// Avvia il programma.
 	configPath := flag.String("config", "config/registry/example.yaml", "Path to registry node YAML config")
 	flag.Parse()
 
@@ -123,4 +124,3 @@ func main() {
 		log.Printf("registry node stopped")
 	}
 }
-

@@ -20,6 +20,7 @@ type Snapshot struct {
 }
 
 func LoadSnapshot(storageDir string) (*Snapshot, error) {
+	// Carica snapshot.
 	dir := strings.TrimSpace(storageDir)
 	if dir == "" {
 		return &Snapshot{}, nil
@@ -48,6 +49,7 @@ func LoadSnapshot(storageDir string) (*Snapshot, error) {
 }
 
 func SaveSnapshot(storageDir string, services []*apiv1.ServiceRecord, peers []*apiv1.NodeInfo) error {
+	// Esegue la logica di save snapshot.
 	dir := strings.TrimSpace(storageDir)
 	if dir == "" {
 		return nil
@@ -73,4 +75,3 @@ func SaveSnapshot(storageDir string, services []*apiv1.ServiceRecord, peers []*a
 	}
 	return nil
 }
-
