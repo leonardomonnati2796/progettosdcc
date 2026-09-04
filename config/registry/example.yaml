@@ -1,3 +1,4 @@
+# Profilo locale di riferimento. Per Docker usare node-1.yaml, node-2.yaml o node-3.yaml.
 node:
   id: registry-node-1
   listen_address: 0.0.0.0:50051
@@ -5,6 +6,7 @@ node:
   storage_dir: ./data/registry-node-1
 
 cluster:
+  # Gli indirizzi dei peer devono essere raggiungibili dalla rete del registry.
   seed_peers:
     - registry-node-1:50051
     - registry-node-2:50051
@@ -17,4 +19,5 @@ cluster:
   max_gossip_fanout: 2
 
 service:
+  # Un servizio senza heartbeat per questo intervallo viene marcato stale.
   heartbeat_ttl_seconds: 60

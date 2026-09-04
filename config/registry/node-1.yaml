@@ -1,3 +1,4 @@
+# Registry node 1: primo nodo del cluster Docker.
 node:
   id: registry-node-1
   listen_address: 0.0.0.0:50051
@@ -5,6 +6,7 @@ node:
   storage_dir: /app/data
 
 cluster:
+  # Tutti i nodi condividono lo stesso elenco di peer iniziali.
   seed_peers:
     - registry-node-1:50051
     - registry-node-2:50051
@@ -17,4 +19,5 @@ cluster:
   max_gossip_fanout: 2
 
 service:
+  # TTL condiviso per rendere omogenea la rilevazione dei servizi inattivi.
   heartbeat_ttl_seconds: 60

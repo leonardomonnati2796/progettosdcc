@@ -1,0 +1,57 @@
+services:
+  registry-node-1:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.registry
+    container_name: registry-node-1
+    command: ["-config", "/app/config/registry/node-1.yaml"]
+    ports:
+      - "50051:50051"
+    volumes:
+      - registry-node-1-data:/app/data
+    networks:
+      - registry-net
+
+  registry-node-2:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.registry
+    container_name: registry-node-2
+    command: ["-config", "/app/config/registry/node-2.yaml"]
+    ports:
+      - "50052:50051"
+    volumes:
+      - registry-node-2-data:/app/data
+    networks:
+      - registry-net
+
+  registry-node-3:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.registry
+    container_name: registry-node-3
+    command: ["-config", "/app/config/registry/node-3.yaml"]
+    ports:
+      - "50053:50051"
+    volumes:
+      - registry-node-3-data:/app/data
+    networks:
+      - registry-net
+
+  service-cli:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.service-cli
+    profiles:
+      - tools
+    networks:
+      - registry-net
+
+networks:
+  registry-net:
+    driver: bridge
+
+volumes:
+  registry-node-1-data:
+  registry-node-2-data:
+  registry-node-3-data:

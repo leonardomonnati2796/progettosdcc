@@ -71,22 +71,16 @@ func (s *ServiceStore) GetDeregisterResult(requestID string) (*apiv1.DeregisterS
 }
 
 func (s *ServiceStore) ReplaceAll(records []*apiv1.ServiceRecord) {
-	// Esegue la logica di replace all.
 	replaced := make(map[string]*apiv1.ServiceRecord, len(records))
 	for _, record := range records {
-		if record == nil {
+		normalized, ok := normalizeRecord(record)
+		if !ok {
 			continue
 		}
-		serviceName := strings.TrimSpace(record.GetServiceName())
-		serviceID := strings.TrimSpace(record.GetServiceId())
-		if serviceName == "" || serviceID == "" {
-			continue
+		if normalized.LogicalVersion == 0 {
+			normalized.LogicalVersion = 1
 		}
-		copyRecord := cloneRecord(record)
-		if copyRecord.LogicalVersion == 0 {
-			copyRecord.LogicalVersion = 1
-		}
-		replaced[recordKey(serviceName, serviceID)] = copyRecord
+		replaced[recordKey(normalized.GetServiceName(), normalized.GetServiceId())] = normalized
 	}
 
 	s.mu.Lock()
@@ -95,33 +89,32 @@ func (s *ServiceStore) ReplaceAll(records []*apiv1.ServiceRecord) {
 }
 
 func (s *ServiceStore) Upsert(record *apiv1.ServiceRecord) *apiv1.ServiceRecord {
-	// Esegue la logica di upsert.
-	if record == nil {
+	normalized, ok := normalizeRecord(record)
+	if !ok {
 		return nil
 	}
 
-	key := recordKey(record.GetServiceName(), record.GetServiceId())
-	copyRecord := cloneRecord(record)
+	key := recordKey(normalized.GetServiceName(), normalized.GetServiceId())
 
 	s.mu.Lock()
 
 	existing, exists := s.records[key]
 	if !exists {
-		if copyRecord.LogicalVersion == 0 {
-			copyRecord.LogicalVersion = 1
+		if normalized.LogicalVersion == 0 {
+			normalized.LogicalVersion = 1
 		}
-		s.records[key] = copyRecord
-		out := cloneRecord(copyRecord)
+		s.records[key] = normalized
+		out := cloneRecord(normalized)
 		s.mu.Unlock()
 		s.emitChange()
 		return out
 	}
 
-	if copyRecord.LogicalVersion <= existing.LogicalVersion {
-		copyRecord.LogicalVersion = existing.LogicalVersion + 1
+	if normalized.LogicalVersion <= existing.LogicalVersion {
+		normalized.LogicalVersion = existing.LogicalVersion + 1
 	}
-	s.records[key] = copyRecord
-	out := cloneRecord(copyRecord)
+	s.records[key] = normalized
+	out := cloneRecord(normalized)
 	s.mu.Unlock()
 	s.emitChange()
 	return out
@@ -249,23 +242,16 @@ func (s *ServiceStore) MergeRemote(records []*apiv1.ServiceRecord) int {
 			continue
 		}
 
-		serviceName := strings.TrimSpace(remote.GetServiceName())
-		serviceID := strings.TrimSpace(remote.GetServiceId())
-		if serviceName == "" || serviceID == "" {
+		incoming, ok := normalizeRecord(remote)
+		if !ok {
 			continue
 		}
 
-		incoming := cloneRecord(remote)
-		incoming.ServiceName = serviceName
-		incoming.ServiceId = serviceID
-		incoming.Endpoint = strings.TrimSpace(incoming.GetEndpoint())
-		incoming.Version = strings.TrimSpace(incoming.GetVersion())
-		incoming.OwnerNodeId = strings.TrimSpace(incoming.GetOwnerNodeId())
 		if incoming.LogicalVersion == 0 {
 			incoming.LogicalVersion = 1
 		}
 
-		key := recordKey(serviceName, serviceID)
+		key := recordKey(incoming.GetServiceName(), incoming.GetServiceId())
 		current, exists := s.records[key]
 		if !exists {
 			s.records[key] = incoming
@@ -327,8 +313,24 @@ func (s *ServiceStore) emitChange() {
 }
 
 func recordKey(serviceName, serviceID string) string {
-	// Esegue la logica di record key.
 	return strings.TrimSpace(serviceName) + "|" + strings.TrimSpace(serviceID)
+}
+
+func normalizeRecord(record *apiv1.ServiceRecord) (*apiv1.ServiceRecord, bool) {
+	if record == nil {
+		return nil, false
+	}
+
+	normalized := cloneRecord(record)
+	normalized.ServiceName = strings.TrimSpace(normalized.GetServiceName())
+	normalized.ServiceId = strings.TrimSpace(normalized.GetServiceId())
+	if normalized.ServiceName == "" || normalized.ServiceId == "" {
+		return nil, false
+	}
+	normalized.Endpoint = strings.TrimSpace(normalized.GetEndpoint())
+	normalized.Version = strings.TrimSpace(normalized.GetVersion())
+	normalized.OwnerNodeId = strings.TrimSpace(normalized.GetOwnerNodeId())
+	return normalized, true
 }
 
 func cloneRecord(record *apiv1.ServiceRecord) *apiv1.ServiceRecord {

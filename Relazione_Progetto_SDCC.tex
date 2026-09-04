@@ -19,7 +19,7 @@
   pdfauthor={Leonardo Monnati}
 }
 
-\title{Relazione Tecnica\\
+\title{PROGETTO SDCC B1 \\
 \large Distributed Service Registry con Replica Gossip}
 \author{Corso di Sistemi Distribuiti e Cloud Computing (SDCC)}
 \date{\today}
@@ -28,203 +28,130 @@
 \maketitle
 
 \section{Introduzione e obiettivi}
-Nel moderno panorama dello sviluppo software, l'architettura a microservizi è diventata lo standard de facto per la progettazione di sistemi scalabili e resilienti. Tuttavia, la natura dinamica ed effimera delle istanze di servizio introduce una sfida fondamentale: il \textit{service discovery}. I nodi di calcolo possono essere avviati, interrotti o migrati frequentemente, rendendo obsoleti i tradizionali approcci di configurazione statica degli indirizzi di rete. 
+In un sistema composto da microservizi, le istanze applicative possono nascere, terminare o cambiare collocazione durante l'esecuzione. Un catalogo statico di indirizzi non riesce quindi a rappresentare in modo affidabile lo stato corrente dell'infrastruttura. Serve un componente capace di raccogliere le registrazioni, verificarne la vitalita' e restituire ai client un endpoint aggiornato.
 
-Il presente progetto si propone di realizzare un \textbf{registro di servizi distribuito} e decentralizzato, sviluppato in linguaggio Go. Il sistema è progettato per tracciare in tempo reale la presenza, la localizzazione e lo stato di salute (\textit{health status}) delle istanze di microservizi all'interno di un cluster di nodi registry mutuamente cooperanti.
+Questo progetto sviluppa in Go un \textbf{registro di servizi distribuito}. Il registro conserva nome, identificativo, endpoint, versione e stato di salute delle istanze applicative. La sua caratteristica centrale e' l'assenza di un punto di controllo unico: tre nodi registry condividono le informazioni attraverso gossip e sincronizzazioni periodiche.
 
-L'obiettivo principale del lavoro è dimostrare come una soluzione architetturale leggera, ispirata ai principi dei sistemi \textit{peer-to-peer} (P2P) e basata su protocolli di \textit{gossip} combinati con meccanismi di sincronizzazione periodica, possa offrire un'alternativa efficiente e resiliente ai registri centralizzati o fortemente consistenti (come Consul o etcd), privilegiando la disponibilità e la tolleranza al partizionamento (proprietà AP del teorema CAP).
+Gli obiettivi sono dimostrare la discovery decentralizzata, la convergenza delle viste locali, la continuita' del servizio dopo il guasto di un nodo e il recupero automatico dello stato. L'intero ciclo e' riproducibile tramite Docker Compose e lo script operativo \texttt{scripts/dev.ps1}.
 
+\section{Architettura del sistema}
+Il sistema adotta un modello peer-to-peer nel quale ogni registry mantiene una copia locale del catalogo e della membership. I nodi non eleggono un coordinatore permanente: ciascuno puo' ricevere richieste esterne, propagare aggiornamenti e recuperare informazioni dagli altri peer.
 
-
-Nello specifico, il sistema è stato progettato per garantire e dimostrare i seguenti requisiti fondamentali:
+I requisiti principali sono:
 
 \begin{itemize}[leftmargin=1.2cm]
-  \item \textbf{Alta disponibilità (Availability) e Fault Tolerance:} Il servizio di discovery deve rimanere operativo e accessibile dai client anche in presenza di fault parziali del cluster, isolamento di singoli nodi o partizionamenti della rete, evitando la presenza di un \textit{single point of failure}.
-  \item \textbf{Consistenza eventuale e Convergenza senza Coordinatore:} Attraverso l'adozione di un protocollo epidemico (gossip), lo stato del registro deve convergere autonomamente verso una configurazione coerente su tutti i nodi del cluster, escludendo la necessità di algoritmi di consenso a forte consistenza (es. Paxos o Raft) o di un nodo coordinatore (\textit{leader}), riducendo così l'overhead di comunicazione.
-  \item \textbf{Self-Healing e Recovery post-crash:} Capacità dei nodi del cluster di recuperare la piena operatività dopo un crash temporaneo, attivando procedure di riallineamento dello stato (\textit{state transfer}) per colmare il gap informativo accumulato durante il periodo di downtime.
-  \item \textbf{Semplicità operativa e di Deployment:} Dimostrare che la complessità intrinseca di un sistema distribuito può essere mitigata sul piano operativo mediante l'uso di strumenti di containerizzazione e automazione, nello specifico Docker Compose per l'orchestrazione locale e un Makefile standardizzato per la gestione del ciclo di vita del software (compilazione, testing, esecuzione).
+  \item \textbf{Disponibilita' e tolleranza ai guasti:} la discovery deve continuare a rispondere anche quando una parte del cluster non e' raggiungibile, evitando una dipendenza da un singolo server.
+  \item \textbf{Consistenza eventuale senza leader:} le modifiche devono raggiungere progressivamente tutti i nodi mediante gossip, senza introdurre un coordinamento centrale o un consenso sincrono.
+  \item \textbf{Recovery post-crash:} un peer riavviato deve poter ricostruire membership e dati persi sfruttando seed peer, gossip e reconcile.
+  \item \textbf{Operabilita' e riproducibilita':} build, test, deployment e fault injection devono essere eseguibili tramite Docker Compose e un runner unico.
 \end{itemize}
 
-Per raggiungere tali obiettivi, l'architettura del sistema si scompone in due macro-interfacce di comunicazione distinte, implementate tramite il framework gRPC per massimizzare le performance e garantire la tipizzazione dei contratti di rete:
-\begin{enumerate}
-  \item \textbf{API Client-to-Cluster (Service Operations):} Un set di procedure remote esposte ai microservizi per consentire le operazioni di ciclo di vita standard, quali la registrazione iniziale, l'invio periodico di segnali di vitalità (\textit{heartbeat}), la deregistrazione esplicita e la risoluzione degli indirizzi (\textit{discovery}).
-  \item \textbf{API Peer-to-Peer (Cluster Cooperation):} Un canale di comunicazione interno e bidirezionale utilizzato esclusivamente dai nodi del registro per scambiarsi informazioni sullo stato globale, propagare gli aggiornamenti e rilevare l'eventuale fallimento di altri peer.
-\end{enumerate}
+L'architettura espone due interfacce gRPC. \texttt{ServiceRegistry} gestisce il rapporto tra servizi applicativi e catalogo; \texttt{RegistryPeer} gestisce membership e replica tra registry. I messaggi sono definiti con Protocol Buffers e trasformati in codice Go tipizzato, riducendo ambiguita' nel contratto di rete e il costo della serializzazione.
+
 \section{Contesto, requisiti e scenario di esecuzione}
 
 \subsection{Contesto architetturale e modello di deployment}
-Il sistema è progettato per operare in un ambiente distribuito e parzialmente isolato, simulato localmente attraverso una strategia di containerizzazione basata su \textbf{Docker}. L'architettura minima di riferimento per la validazione del protocollo prevede il dispiegamento di tre istanze indipendenti del nodo registry (\textit{Registry Nodes}) e di un client CLI (\textit{Command Line Interface}) di supporto, adibito alla stimolazione delle API e alla verifica dello stato del cluster.
+Il sistema e' pensato per un ambiente distribuito e parzialmente isolato, rappresentato localmente tramite \textbf{Docker}. Docker Compose crea una rete bridge condivisa nella quale i nodi possono risolversi attraverso i rispettivi nomi DNS, ad esempio \texttt{registry-node-1}, \texttt{registry-node-2} e \texttt{registry-node-3}.
 
-Ogni nodo registry viene eseguito all'interno di un container dedicato, dotato di un proprio spazio di indirizzamento IP e di risorse computazionali isolate. Dal punto di vista software, ciascun peer mantiene in memoria una \textbf{vista locale} (una tabella di routing e un registro di servizi) che rappresenta la propria percezione dello stato globale del sistema. Non essendoci una sorgente di verità centralizzata, la coerenza informativa viene garantita esclusivamente dalle interazioni \textit{peer-to-peer}, attraverso le quali i nodi propagano in modo proattivo le modifiche (nuove registrazioni, variazioni di stato o rimozioni) al resto del cluster mediante dinamiche epidemiche. La scelta di un cluster a tre nodi rappresenta il punto di partenza ottimale per osservare e validare scenari di tolleranza ai guasti e dinamiche di convergenza multi-hop.
+Ogni registry vive in un container separato e mantiene una \textbf{vista locale} composta da catalogo dei servizi e membership dei peer. I tre nodi utilizzano lo stesso binario, ma ricevono configurazioni differenti per identificativo, indirizzo pubblicizzato e volume di persistenza.
 
 \subsection{Requisiti operativi e prerequisiti di sistema}
-Per garantire la riproducibilità dell'ambiente di esecuzione e azzerare i conflitti di dipendenze software locali (\textit{"it works on my machine"}), il ciclo di vita del progetto è stato interamente standardizzato. L'ambiente ospite (\textit{host OS}) deve soddisfare esclusivamente due prerequisiti fondamentali:
+Per rendere l'esecuzione ripetibile, l'ambiente host deve disporre dei seguenti strumenti:
 
 \begin{itemize}[leftmargin=1.2cm]
-  \item \textbf{Docker Desktop (o Docker Engine con plugin Compose):} Necessario per l'istanziamento del network virtuale isolato e l'orchestrazione dei container. Docker consente di mappare le porte gRPC dei nodi e di simulare in modo realistico la latenza e il ciclo di vita dei processi distribuiti.
-  \item \textbf{GNU Make (utility \texttt{make}):} Utilizzato come motore di automazione. Il file \texttt{Makefile} incluso nel progetto astrae la complessità dei comandi Docker e Go, fornendo un'interfaccia a riga di comando unificata e dichiarativa per la compilazione, l'inizializzazione e il testing del sistema.
+  \item \textbf{Docker Desktop:} gestisce immagini, container, rete virtuale, volumi e mapping delle porte gRPC.
+  \item \textbf{PowerShell:} esegue \texttt{scripts/dev.ps1}, che raccoglie i comandi di progetto e automatizza lo scenario.
+  \item \textbf{Go 1.24 o successivo:} permette di compilare il codice e lanciare la suite di test sull'host.
 \end{itemize}
 
 \subsection{Scenario dimostrativo ed evoluzione temporale}
-La validazione funzionale e la verifica dei requisiti di resilienza del cluster avvengono attraverso l'esecuzione di uno scenario dimostrativo completo, orchestrato in modo deterministico dal target \texttt{make trace-cover}. Questo scenario simula l'intero ciclo di vita di un ecosistema distribuito nell'arco di una sessione di esecuzione cronologica, articolandosi nelle seguenti macro-fasi sequenziali:
+La validazione funzionale e' organizzata come una sequenza di comandi forniti da \texttt{scripts/dev.ps1}. Il flusso combina \texttt{trace-up}, \texttt{select-service}, \texttt{register}, \texttt{discovery}, \texttt{deregister} e \texttt{down} per riprodurre il ciclo di vita di un servizio all'interno del cluster.
+
+Lo scenario copre le seguenti macro-fasi sequenziali:
 
 \begin{enumerate}
-  \item \textbf{Bootstrap del Cluster:} Inizializzazione della rete virtuale Docker e avvio simultaneo dei tre nodi registry, i quali avviano la procedura di \textit{peer discovery} per stabilire la topologia iniziale della rete di gossip.
-  \item \textbf{Registrazione del Servizio:} Il client CLI effettua una chiamata gRPC verso uno specifico nodo (\textit{Gateway Node}), richiedendo l'inserimento di un nuovo microservizio fittizio all'interno del registro.
-  \item \textbf{Propagazione e Convergenza Multi-Nodo:} Osservazione del protocollo di gossip in azione. Si verifica il tempo necessario affinché la notifica della nuova registrazione si propaghi in modo asincrono dal nodo gateway ai restanti peer del cluster, portando il sistema a uno stato di consistenza eventuale.
-  \item \textbf{Fase di Heartbeat e Monitoraggio:} Simulazione del mantenimento dello stato di attività del microservizio mediante l'invio continuo di segnali di vitalità (\textit{keep-alive}), monitorati dai nodi del registro.
-  \item \textbf{Simulazione di Fault (Crash di un nodo):} Interruzione brutale e non concordata (tramite comando \texttt{docker stop} o \texttt{kill}) di uno dei nodi del cluster per simulare un guasto hardware o un crash applicativo di rete.
-  \item \textbf{Resilienza e Tolleranza ai Guasti:} Verifica del comportamento dei nodi superstiti. Il cluster ridotto deve continuare a servire le richieste di discovery dei client senza interruzioni, dimostrando l'assenza di \textit{single point of failure} e isolando il nodo fallito.
-  \item \textbf{Self-Healing e Recovery (Riallineamento dello stato):} Riavvio del nodo precedentemente interrotto. In questa fase si testa la capacità del nodo reimmesso nella rete di accorgersi del gap informativo accumulato e di attivare una procedura di sincronizzazione attiva con i peer sani per ricostruire la propria vista locale aggiornata.
-  \item \textbf{Deregistrazione Finale e Teardown:} Rimozione esplicita del servizio dal registro, verifica della propagazione della cancellazione (\textit{tombstone}) e successivo spegnimento pulito dell'intera infrastruttura di container.
+  \item \textbf{Bootstrap del cluster:} \texttt{trace-up} ricrea l'ambiente, prepara le immagini e avvia i tre registry.
+  \item \textbf{Scelta e registrazione:} \texttt{select-service} seleziona il profilo e \texttt{register} invia il record attraverso la CLI containerizzata, avviando anche il heartbeat.
+  \item \textbf{Convergenza:} il gossip diffonde il record e i peer verificano progressivamente lo stesso stato.
+  \item \textbf{Monitoraggio:} heartbeat e TTL permettono di distinguere un servizio attivo da uno non piu' raggiungibile.
+  \item \textbf{Fault injection:} l'arresto di un registry simula un guasto parziale.
+  \item \textbf{Continuita' operativa:} i peer superstiti rispondono alle richieste e mantengono la copia replicata.
+  \item \textbf{Recovery:} il nodo viene riavviato e recupera lo stato mediante gossip e \textit{reconcile}.
+  \item \textbf{Teardown:} \texttt{deregister} propaga la rimozione logica e \texttt{down} arresta l'ambiente.
 \end{enumerate}
 
-\section{Architettura del sistema}
-La progettazione del sistema adotta un approccio modulare e disaccoppiato, volto a separare nettamente le interfacce di comunicazione di rete, le strutture dati per la memorizzazione dello stato in memoria e i motori logici che governano i protocolli di sincronizzazione. L'architettura interna di ogni singolo nodo è strutturata in quattro macro-blocchi funzionali indipendenti, i quali cooperano scambiandosi informazioni in modo thread-safe.
-
-\subsection{Componenti principali del nodo}
-
-\begin{enumerate}[leftmargin=1.2cm]
-  \item \textbf{Nodo Registry (Core Server \& Network Interfaces):} Rappresenta il punto di ingresso del processo Go e agisce da orchestratore locale. Questo componente istanzia e gestisce due server gRPC distinti (o un unico server con servizi multipli registrati):
-  \begin{itemize}
-    \item \textit{User API Service:} Dedicato a servire le richieste provenienti dai microservizi esterni (registrazione, rinnovo dell'heartbeat, risoluzione degli indirizzi).
-    \item \textit{Peer API Service:} Dedicato esclusivamente all'interazione tra i nodi del cluster per lo scambio dei vettori di stato e la ricezione dei messaggi di gossip.
-  \end{itemize}
-  La scelta di gRPC su protocollo HTTP/2 permette di sfruttare connessioni persistenti, multiplexing e una serializzazione efficiente tramite Protocol Buffers.
-
-  \item \textbf{Service Store (Local Service Registry):} È la struttura dati in-memory preposta alla memorizzazione dei record relativi ai microservizi attivi. Per garantire la coerenza eventuale ed evitare conflitti durante la propagazione asincrona, ogni record è associato a una \textbf{versione logica} (un timestamp o un contatore monotonico crescente, es. \textit{Lamport Timestamp}). Lo Store implementa meccanismi di mutua esclusione (\texttt{sync.RWMutex} in Go) per consentire letture concorrenti ad alta frequenza e scritture protette da \textit{race conditions}.
-
-  \item \textbf{Peer Store (Cluster Membership Table):} È il modulo deputato al mantenimento della topologia del cluster. Conserva l'elenco dei nodi peer noti, i loro indirizzi di rete e il rispettivo stato di vitalità (\textit{Active}, \textit{Suspect}, \textit{Dead}). Il Peer Store fornisce al motore di gossip gli indirizzi dei nodi bersaglio verso cui instradare i messaggi e aggiorna dinamicamente la mappa del cluster in base alle metriche di raggiungibilità rilevate.
-
-  \item \textbf{Runtime Gossip (Synchronization \& Lifecycle Engine):} Rappresenta il cuore algoritmico del progetto. Si tratta di un motore reattivo e periodico, implementato tramite \textit{goroutines} e cicli di \textit{ticker} asincroni, che governa quattro sotto-funzioni critiche:
-  \begin{itemize}
-    \item \textit{Bootstrap:} Procedura iniziale di join in cui il nodo contatta i peer noti (\textit{seed nodes}) per integrarsi nel cluster.
-    \item \textit{Gossip:} Scelta casuale di un sottoinsieme di peer a cui inviare in modo proattivo gli aggiornamenti locali (\textit{rumor mongering}).
-    \item \textit{Reconcile (Anti-Entropy):} Meccanismo di background a intervalli più lunghi per confrontare l'intero stato del Service Store con un peer e sanare eventuali disallineamenti passati inosservati.
-    \item \textit{Pruning \& Eviction:} Monitoraggio attivo del timeout dei peer e rimozione (o marcatura come obsoleti tramite \textit{tombstoning}) delle istanze non più raggiungibili.
-  \end{itemize}
-\end{enumerate}
-
-\subsection{Topologia di rete e modello di persistenza}
-In fase di esercizio e validazione, la topologia standard prevede il deployment di tre nodi registry posizionati all'interno di una rete virtuale isolata di tipo \textbf{Docker bridge}. Questa configurazione consente la risoluzione dei nomi dei container tramite il DNS interno di Docker (es. \texttt{registry-1}, \texttt{registry-2}, \texttt{registry-3}) e simula un ambiente di rete locale (\textit{LAN}) ad alta affidabilità ma soggetto a possibili latenze o partizionamenti software controllati.
-
-Sebbene il registro operi prevalentemente in memoria per massimizzare il throughput delle risposte di discovery, ogni nodo è configurato con un modello di \textbf{persistenza locale su volume Docker dedicato}. All'atto di ogni variazione consolidata dello stato (es. nuova registrazione confermata o rimozione), il Service Store effettua il dump asincrono o la scrittura in \textit{Append-Only File} (AOF) dei dati su un file system mappato sul volume host. Questo previene la perdita totale delle informazioni in caso di crash distruttivo del container, consentendo al runtime, in fase di riavvio, di ricaricare lo stato pre-crash prima di avviare la procedura di riconciliazione con i peer.
-
-\subsection{Interfacce gRPC e modello dati}
-La definizione dei contratti di rete e la serializzazione dei messaggi sono affidate a \textbf{Protocol Buffers (v3)}. Questa scelta garantisce un accoppiamento debole tra i moduli, un'efficace validazione dei tipi a tempo di compilazione e performance elevate in termini di throughput e footprint di rete. Il file di specifica \texttt{.proto} definisce due servizi gRPC logicamente distinti, mappati sulle due macro-interfacce di comunicazione dell'architettura.
+\section{Interfacce gRPC e modello dati}
+I contratti di comunicazione sono descritti con \textbf{Protocol Buffers (v3)} e compilati in stub Go. Il file \texttt{proto/registry.proto} separa le operazioni rivolte ai servizi applicativi da quelle necessarie alla cooperazione tra registry.
 
 \subsubsection{Definizione dei Servizi gRPC}
-
 \begin{itemize}[leftmargin=1.2cm]
-  \item \textbf{ServiceRegistry (Interfaccia Client-to-Cluster):} Gestisce il ciclo di vita dei microservizi applicativi che intendono fare uso del sistema di discovery. Espone le seguenti procedure remote:
+  \item \textbf{ServiceRegistry (interfaccia client-to-cluster):} governa il ciclo di vita delle istanze che utilizzano la discovery. Espone le seguenti procedure remote:
   \begin{itemize}
-    \item \texttt{RegisterService}: Consente a una nuova istanza di microservizio di dichiarare la propria presenza, memorizzando le informazioni di rete e i metadati associati nel Service Store del nodo contattato.
-    \item \texttt{DeregisterService}: Avvia la rimozione esplicita e controllata di un'istanza dal registro (es. durante uno shutdown pulito del microservizio).
-    \item \texttt{Heartbeat}: Chiamata ad alta frequenza e basso payload utilizzata dai microservizi per notificare periodicamente la propria vitalità e resettare i timer di timeout sul registro.
-    \item \texttt{GetService} / \texttt{ListServices}: Metodi di consultazione idempotenti utilizzati dai client per risolvere l'indirizzo di uno specifico servizio o per ottenere l'elenco completo delle istanze disponibili nel cluster.
+    \item \texttt{RegisterService}: inserisce un'istanza con i relativi dati di rete e metadati.
+    \item \texttt{DeregisterService}: avvia la rimozione controllata di un'istanza.
+    \item \texttt{Heartbeat}: rinnova la presenza e aggiorna lo stato di salute.
+    \item \texttt{GetService} / \texttt{ListServices}: permettono di risolvere una singola istanza o consultare il catalogo locale.
   \end{itemize}
 
-  \item \textbf{RegistryPeer (Interfaccia Peer-to-Peer):} Modella il protocollo di cooperazione interna e sincronizzazione dello stato tra i diversi nodi del cluster registry.
+  \item \textbf{RegistryPeer (interfaccia peer-to-peer):} definisce le RPC con cui i nodi condividono membership e dati:
   \begin{itemize}
-    \item \texttt{JoinCluster}: Eseguita da un nodo in fase di bootstrap per annunciare la propria entrata nella rete a un nodo seed noto, richiedendo l'inclusione nel Peer Store.
-    \item \texttt{GossipSync}: Il canale principale del protocollo epidemico. Viene invocata periodicamente per spingere (\textit{push}) in modo asincrono un vettore di aggiornamenti locali verso un sottoinsieme di peer scelti casualmente.
-    \item \texttt{PullState}: Utilizzata durante le fasi di riconciliazione anti-entropia o di recovery post-crash. Consente a un nodo di richiedere esplicitamente l'intero snapshot dello stato di un altro peer per sanare disallineamenti macroscopici.
+    \item \texttt{JoinCluster}: annuncia un nodo ai seed peer e recupera la membership conosciuta.
+    \item \texttt{GossipSync}: invia aggiornamenti locali a un insieme limitato di peer.
+    \item \texttt{PullState}: recupera lo stato di un peer durante la riconciliazione o il recovery.
   \end{itemize}
 \end{itemize}
 
 \subsubsection{Modello Dati e Struttura del ServiceRecord}
-L'entità informativa fondamentale scambiata sulla rete e mantenuta in memoria è il messaggio \texttt{ServiceRecord}. Per supportare la natura distribuita e decentralizzata del sistema, la struttura dati non si limita a tracciare i dettagli applicativi, ma integra metadati cruciali per la gestione della consistenza eventuale e della tolleranza ai guasti.
+Il record principale scambiato tra client e peer e' \texttt{ServiceRecord}. Oltre ai dati del servizio, contiene informazioni necessarie per controllare vitalita', proprieta' e ordine degli aggiornamenti.
 
 I campi principali che compongono il messaggio sono così strutturati:
 
 \begin{itemize}[leftmargin=1.2cm]
   \item \textbf{Identificazione univoca:}
   \begin{itemize}
-    \item \texttt{service\_name} (string): Il nome logico del microservizio (es. \texttt{"auth-service"}), utilizzato dai client in fase di discovery per raggruppare istanze omogenee.
-    \item \texttt{service\_id} (string): Identificativo univoco globale (es. un UUID o un hash string) della singola istanza fisica del microservizio, necessario per distinguerla dai suoi cloni replicati.
+    \item \texttt{service\_name} (string): nome logico usato per raggruppare istanze dello stesso servizio.
+    \item \texttt{service\_id} (string): identificativo della singola istanza, distinto dal nome del servizio.
   \end{itemize}
   
   \item \textbf{Metadati applicativi e di rete:}
   \begin{itemize}
-    \item \texttt{endpoint} (string): L'indirizzo di rete (IP/Host e Porta, es. \texttt{"10.0.1.5:8080"}) a cui inviare le richieste di business.
-    \item \texttt{version} (string): La versione applicativa del microservizio (es. \texttt{"v1.2.0"}), utile per supportare strategie di routing avanzate come i \textit{canary deployments} o i rilasci \textit{blue-green}.
+    \item \texttt{endpoint} (string): indirizzo host e porta al quale il client puo' collegarsi.
+    \item \texttt{version} (string): versione dell'istanza, utile per distinguere release differenti.
   \end{itemize}
 
   \item \textbf{Stato di salute e vitalità:}
   \begin{itemize}
-    \item \texttt{health\_status} (enum): Stato interno dell'istanza (es. \texttt{HEALTHY}, \texttt{UNHEALTHY}, \texttt{SUSPECT}).
-    \item \texttt{last\_heartbeat\_timestamp} (int64): Marcatura temporale dell'ultimo segnale di keep-alive ricevuto dal client, espresso in formato Unix Epoch. Viene monitorato dai nodi per calcolare la scadenza (\textit{TTL}) dell'istanza.
+    \item \texttt{health\_status} (enum): stato osservato dell'istanza, ad esempio serving o degraded.
+    \item \texttt{last\_heartbeat\_unix} (int64): timestamp Unix dell'ultimo keep-alive ricevuto, usato per il calcolo del TTL.
   \end{itemize}
 
   \item \textbf{Proprietà distribuite e ordinamento:}
   \begin{itemize}
-    \item \texttt{owner\_node\_id} (string): L'identificativo del nodo registry che ha preso in carico la registrazione iniziale o che riceve gli heartbeat diretti del servizio. Questo campo permette di stabilire una responsabilità primaria per le operazioni di monitoraggio attivo.
-    \item \texttt{logical\_version} (uint64): Un contatore monotonico crescente associato al record. Questo metadato è fondamentale nelle dinamiche di gossip: agisce come un meccanismo di ordinamento causale semplificato (ispirato ai timestamp di Lamport) per determinare l'anzianità e la validità di un aggiornamento. Quando un nodo riceve un record via gossip, confronta la \texttt{logical\_version} locale con quella ricevuta: l'aggiornamento viene accettato e sovrascritto solo se la versione ricevuta è strettamente maggiore, risolvendo all'origine i conflitti derivanti da messaggi di rete duplicati o disordinati (\textit{out-of-order delivery}).
+    \item \texttt{owner\_node\_id} (string): nodo che ha accettato la registrazione o riceve gli heartbeat diretti.
+    \item \texttt{logical\_version} (uint64): contatore monotono usato per accettare soltanto aggiornamenti piu' recenti e ignorare duplicati o messaggi fuori ordine.
   \end{itemize}
 \end{itemize}
-
-\subsection{Flusso logico ad alto livello}
-\begin{verbatim}
-Service Instance ---> Registry Node (API ServiceRegistry)
-                         |
-                         | scrive su ServiceStore
-                         v
-                    Gossip Runtime
-                         |
-                 +-------+-------+
-                 |               |
-            GossipSync       PullState
-                 |               |
-                 v               v
-           Altri Registry Nodes (stato convergente)
-\end{verbatim}
 
 \section{Architettura, Orchestrazione e Sincronizzazione del Cluster}
 \label{sec:architettura_cluster}
 
-Il ciclo di vita del sistema si basa su un paradigma \textit{Docker-first}, orchestrato tramite automazione nativa \texttt{GNU Make}. Il flusso operativo si divide in due macro-fasi: l'inizializzazione distruttiva dello stato precedente e la convergenza del cluster tracciato.
+Il sistema segue un approccio \textit{Docker-first}: Docker Compose gestisce i container e \texttt{scripts/dev.ps1} offre un'interfaccia unica per le operazioni di sviluppo. Il ciclo operativo distingue il reset iniziale, l'avvio dei nodi e la successiva convergenza delle loro viste.
 
 \subsection{Avvio ed Orchestrazione del Cluster}
-L'esecuzione del target principale \texttt{make trace-up} implementa una sequenza deterministica definita nel \texttt{Makefile}:
+Il comando \texttt{scripts/dev.ps1 trace-up} esegue una sequenza deterministica di preparazione dell'ambiente:
 
-\begin{equation}
-\text{trace-up} \implies \mathcal{K} \cup \mathcal{B} \cup \mathcal{S} \cup \mathcal{H}
-\end{equation}
-
-Dove ogni operazione atomica è mappata come segue:
+Le operazioni principali sono:
 \begin{itemize}
-    \item \textbf{$\mathcal{K}$ (Reset dello stato):} Esecuzione di \texttt{docker compose down -v} (\texttt{Makefile:104}). Rimuove i container attivi, le reti associate e forza l'epurazione dei volumi persistenti anonimi e nominativi, garantendo l'idempotenza dell'avvio.
-    \item \textbf{$\mathcal{B}$ (Compilazione e Build):} Generazione parallela delle immagini Docker per i tre nodi di \textit{Registry} e per lo strumento di \textit{CLI} (\texttt{Makefile:105-106}).
-    \item \textbf{$\mathcal{S}$ (Inizializzazione dello stato):} Creazione dei file di tracciamento locali sul sistema host per la sincronizzazione dei log (\texttt{Makefile:107}).
-    \item \textbf{$\mathcal{H}$ (Attivazione del Demone):} Lancio in background del processo di monitoraggio continuo tramite il target \texttt{trace-heartbeat} (\texttt{Makefile:111}), garantendo la vitalità del cluster in regime operativo.
+    \item \textbf{Reset dello stato:} \texttt{docker compose down -v} elimina container, rete e volumi della sessione precedente.
+    \item \textbf{Build:} vengono costruite le immagini dei tre registry e del client CLI.
+    \item \textbf{Preparazione:} viene creato il file locale che segnala l'avvio dello scenario.
+    \item \textbf{Avvio:} i tre nodi registry vengono avviati; il heartbeat parte in seguito con \texttt{register}.
 \end{itemize}
 
-La pulizia ordinaria (senza wipe del volume logico) è delegata a \texttt{make compose-down} (\texttt{Makefile:96}), che preserva i dati su disco.
-
-\begin{figure}[htbp]
-\centering
-\begin{tikzpicture}[
-    node distance=1.2cm and 0.8cm,
-    block/.style={rectangle, draw, fill=blue!5, text width=2.6cm, align=center, minimum height=1cm, rounded corners=2pt, font=\small},
-    arrow/.style={-Stealth, thick}
-]
-    \node (make) [block, fill=orange!10] {\texttt{make trace-up}};
-    \node (down) [block, right=of make] {Reset dello Stato (\texttt{down -v})};
-    \node (build) [block, right=of down] {Build parallela Registry \& CLI};
-    \node (state) [block, below=of build] {File di Stato Trace};
-    \node (heartbeat) [block, left=of state, fill=green!5] {Heartbeat Background};
-
-    \draw [arrow] (make) -- (down);
-    \draw [arrow] (down) -- (build);
-    \draw [arrow] (build) -- (state);
-    \draw [arrow] (state) -- (heartbeat);
-\end{tikzpicture}
-\caption{Flusso deterministico di inizializzazione del cluster.}
-\label{fig:flow_trace_up}
-\end{figure}
+La chiusura ordinaria si esegue con \texttt{scripts/dev.ps1 down}: i container vengono rimossi, mentre i volumi Docker non vengono cancellati.
 
 \subsection{Topologia di Docker Compose e Modello di Rete}
-Il file \texttt{docker-compose.yml} definisce un'infrastruttura a quattro servizi logici interconnessi tramite una rete virtuale isolata di tipo \textit{bridge} ($\mathcal{N}_{\text{bridge}}$). Siano $N = \{n_1, n_2, n_3\}$ i tre nodi di Registry e $C_{\text{cli}}$ il client effimero. Ciascun nodo esegue lo stesso costrutto d'immagine astratta, differenziandosi esclusivamente per il file di configurazione iniettato all'avvio.
+Il file \texttt{deploy/docker-compose.yml} descrive quattro servizi logici collegati da una rete virtuale \textit{bridge} ($\mathcal{N}_{\text{bridge}}$). Siano $N = \{n_1,n_2,n_3\}$ i registry e $C_{\text{cli}}$ il client effimero. I registry condividono l'immagine applicativa e si distinguono attraverso il profilo YAML assegnato.
 
 La mappatura delle porte tra l'interfaccia di loopback dell'host ($P_{\text{host}}$) e le porte interne ai container ($P_{\text{container}}$) risponde alla seguente funzione di partizionamento:
 \begin{equation}
@@ -239,346 +166,154 @@ f(n_3) \implies 50051 \to 50053
 \end{cases}
 \end{equation}
 
-L'isolamento di rete garantisce la risoluzione DNS interna tramite il nome del servizio (es. \texttt{registry-node-1} risolve l'IP interno nella sottorete Docker). Inoltre, ogni nodo $n_i$ monta un volume logico isolato (\texttt{docker-compose.yml:54}) associato alla directory interna \texttt{/app/data}, impedendo la collisione dei file di snapshot gRPC. Il \texttt{service-cli}, definito con il profilo \texttt{tools} (\texttt{docker-compose.yml:46}), non possiede un ciclo di vita continuo (no-daemon) ma viene invocato \textit{on-demand}.
-
-\subsection{Pipeline di Compilazione Immagini (Multi-Stage Build)}
-Per minimizzare la superficie d'attacco e ottimizzare l'efficienza di deployment, sia il \textit{Registry} sia la \textit{Service CLI} utilizzano una strategia di compilazione \textbf{Multi-Stage} divisa in due stadi:
-\begin{enumerate}
-    \item \textbf{$\text{Stage}_{\text{Build}}$ (Compilazione):} Ambiente basato su immagine ufficiale \texttt{golang:alpine}. Vengono installate le dipendenze di build, scaricati i moduli e compilato il binario statico isolando le architetture hardware target:
-    \begin{equation}
-    \text{CGO\_ENABLED}=0 \quad \text{GOOS}=\text{linux} \quad \text{go build} -o \ \dots
-    \end{equation}
-    \item \textbf{$\text{Stage}_{\text{Runtime}}$ (Esecuzione):} Immagine di base \texttt{alpine:latest}. Vengono importati esclusivamente gli artefatti strettamente necessari all'esecuzione runtime, riducendo radicalmente l'impronta sul disco del container. Nel caso del Registry (\texttt{Dockerfile.registry}), l'entrypoint definisce il caricamento del file di configurazione specifico passato via flag: \texttt{ENTRYPOINT ["registry"]} con default \texttt{CMD ["-config", "/app/config/registry/node-1.yaml"]}.
-\end{enumerate}
+La rete consente ai container di risolvere i peer tramite hostname Docker, per esempio \texttt{registry-node-1}. Il container \texttt{service-cli} non e' un demone: viene creato solo quando serve e rimosso al termine del comando.
 
 \subsection{Bootstrapping Interno e Ciclo di Vita del Processo Go}
-All'avvio del binario Go dentro il container, il ciclo di vita del processo si articola in quattro fasi sequenziali a tolleranza d'errore:
+Quando il binario Go viene avviato, il processo segue quattro passaggi principali:
 \begin{enumerate}
-    \item \textbf{Parsing della Configurazione:} Il flag \texttt{-config} viene valutato per mappare la struttura dati YAML (\texttt{main.go:22}).
-    \item \textbf{Inizializzazione di Rete e Storage:} Viene aperto un listener TCP sulla porta designata e viene verificata la presenza di snapshot storici (\texttt{storage\_dir}) per ripristinare lo stato in memoria prima di accettare traffico.
-    \item \textbf{Registrazione dei Server gRPC:} Vengono istanziati contemporaneamente i due endpoint logici del server (\texttt{main.go:70-71}): \textit{Client API} (per operazioni esterne) e \textit{Peer Gossip API} (per sincronizzazione interna).
-    \item \textbf{Attivazione dei Runtime Asincroni:} Vengono spawnate le goroutine dedicate al motore di Gossip (\texttt{main.go:73}) e al ticker di \textit{Heartbeat Sweep} (\texttt{main.go:85}), il quale invalida i servizi con TTL scaduto ($t > \Delta t_{\text{stale}}$).
+    \item \textbf{Lettura della configurazione:} il flag \texttt{-config} seleziona il profilo YAML del nodo.
+    \item \textbf{Rete e persistenza:} viene aperto il listener e, se presente, viene caricato lo snapshot dallo \texttt{storage\_dir}.
+    \item \textbf{Server gRPC:} vengono registrate le API per client e peer sullo stesso server.
+    \item \textbf{Runtime asincroni:} vengono avviati gossip, reconcile, membership sweep e ticker per i servizi stale.
 \end{enumerate}
-Alla ricezione di segnali POSIX ($\text{SIGINT}$ o $\text{SIGTERM}$), il processo intercetta la notifica (\texttt{main.go:121}), interrompe i loop di ricezione del gossip, invia un pacchetto di \textit{Graceful Leave} ai peer del cluster per notificare la propria disconnessione controllata, e infine arresta il server gRPC in modo pulito.
+Alla ricezione di $\text{SIGINT}$ o $\text{SIGTERM}$ il processo ferma i runtime, comunica il proprio \textit{Graceful Leave} ai peer e arresta il server gRPC in modo ordinato.
 
 \subsection{Topologia Gossip e il Meccanismo del Gossip Gate}
-La configurazione dei nodi governa il comportamento del protocollo di gossip e i limiti del cluster di rete tramite i parametri \texttt{listen\_address} (binding interno, es. \texttt{0.0.0.0:50051}), \texttt{advertise\_address} (hostname DNS esposto ai peer, es. \texttt{registry-node-1:50051}) e \texttt{seed\_peers} (array di bootstrap per l'aggancio iniziale alla rete mesh):
-\begin{equation}
-\mathcal{P}_{\text{seeds}}(n_1) = \{\text{"registry-node-2:50051"}, \text{"registry-node-3:50051"}\}
-\end{equation}
+I profili YAML regolano gossip e membership attraverso parametri come \texttt{listen\_address}, usato per il binding interno, e \texttt{advertise\_address}, usato dai peer per raggiungere il nodo.
 
-Per evitare condizioni di \textit{race condition} durante il cold bootstrap del cluster, il runtime di Go implementa una barriera di sincronizzazione logica chiamata \textbf{Gossip Gate} (\texttt{runtime.go:246}). Sia $G_i$ lo stato del gate del nodo $i$-esimo ed $E$ l'evento di esistenza del file di controllo:
+Per evitare che i nodi inizino a scambiarsi dati prima che il cluster sia pronto, il runtime usa una barriera logica chiamata \textbf{Gossip Gate}. Sia $G_i$ lo stato del gate del nodo $i$ ed $E$ l'esistenza del file di controllo:
 \begin{equation}
 G_i = \begin{cases} \text{BLOCKED}, & \neg\exists(\text{gossip\_gate\_path}) \\ \text{UNBLOCKED}, & \exists(\text{gossip\_gate\_path}) \end{cases}
 \end{equation}
 
-Tutti i loop fondamentali del sistema d'orchestrazione distribuiti (\texttt{bootstrap}, \texttt{gossip}, \texttt{reconcile} e \texttt{peer sweep}) eseguono un'attesa bloccante sul gate:
+I loop di bootstrap, gossip, reconcile e peer sweep attendono l'apertura del gate:
 \begin{equation}
-\forall \text{loop} \in \{\text{Gossip, Reconcile, Sweep}\}, \quad \text{Attendi}(G_i == \text{UNBLOCKED})
+\begin{aligned}
+\forall\,\text{loop} &\in \{\text{Gossip, Reconcile, Sweep}\},\\
+&\text{Attendi}(G_i == \text{UNBLOCKED})
+\end{aligned}
 \end{equation}
-La transizione di stato da \text{BLOCKED} a \text{UNBLOCKED} avviene programmaticamente tramite l'esecuzione di \texttt{make trace-up}, il quale esegue un comando di \texttt{touch .gossip-enabled} (\texttt{trace-register}) sui tre nodi, sbloccando l'esecuzione dei processi in modo sincrono.
+La transizione da \text{BLOCKED} a \text{UNBLOCKED} avviene durante \texttt{scripts/dev.ps1 register}, che crea \texttt{.gossip-enabled} nei tre container.
 
 \subsection{Esecuzione dei Comandi tramite CLI Tool Effimera}
-Il container \texttt{service-cli} interagisce con il cluster iniettando comandi atomici all'interno della rete mesh di Docker tramite il costrutto \texttt{docker compose run --rm service-cli [subcommand]}. L'argomento \texttt{--rm} garantisce l'eliminazione del container ($\mathcal{T}_{\text{container}} \to \emptyset$) al termine del processo, azzerando i residui sull'host.
-
-I comandi mappati all'interno di \texttt{main.go:37} rispondono all'insieme:
+Il container \texttt{service-cli} esegue comandi brevi nella rete Docker tramite \texttt{docker compose run --rm service-cli [subcommand]}. Le operazioni disponibili sono:
 \begin{equation}
-\text{Subcommands} = \{\text{register}, \text{heartbeat}, \text{deregister}, \text{list}\}
+\text{Subcommands} = \{\text{register}, \text{heartbeat}, \text{deregister}, \text{get}, \text{list}\}
 \end{equation}
-In caso di partizionamento di rete o di spegnimento di uno o più nodi del cluster, la subcommand \texttt{list} implementa un pattern di \textbf{Degradazione Controllata (Graceful Degradation)} (\texttt{main.go:148}). Invece di sollevare un'eccezione non gestita (\textit{panic}), il client intercetta l'errore di connessione gRPC ed evidenzia l'anomalia visualizzando la stringa stringente \texttt{"nodo disattivato"}.
-
-\subsection{Modello di Persistenza e Mutazione dello Stato}
-La persistenza dello stato globale del registro è implementata tramite un meccanismo di \textbf{Event-Driven Snapshotting} su file system locale nel file JSON \texttt{registry\_snapshot.json} (\texttt{persistence.go:15}). 
-
-All'avvio, il nodo invoca \texttt{load()} (\texttt{persistence.go:22}) eseguendo una transizione $S_0 \leftarrow D_{\text{disk}}$. Al verificarsi di una mutazione (es. una nuova registrazione tramite la CLI), lo stato in memoria viene aggiornato e viene triggerata una persistenza immediata su disco:
-\begin{equation}
-S_{t+1} = \delta(S_t, \text{evento}) \implies \text{save}(S_{t+1}) \to D_{\text{disk}}
-\end{equation}
-
-La persistenza dei dati sul disco host varia radicalmente a seconda del target di terminazione invocato dall'operatore, come descritto nella Tabella~\ref{tab:persistence_shutdown}.
-
-\begin{table}[htbp]
-\centering
-\caption{Effetti dei comandi di arresto sulla persistenza dei dati.}
-\label{tab:persistence_shutdown}
-\small
-\begin{tabular}{llp{5.5cm}}
-\toprule
-\textbf{Target} & \textbf{Comando Sottostante} & \textbf{Impatto sullo Stato e sui Volumi} \\
-\midrule
-\texttt{make compose-down} & \texttt{docker compose down} & \textbf{Conservativo:} I container vengono arrestati, ma i volumi logici associati a \texttt{/data} rimangono intatti sull'host. Al successivo avvio lo stato viene ripristinato. \\
-\addlinespace
-\texttt{make trace-up} & \texttt{docker compose down -v} & \textbf{Distruttivo:} Il flag \texttt{-v} forza la rimozione dei volumi. Lo snapshot viene eliminato, azzerando la memoria storica per un \textit{cold start} pulito. \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\subsection{Inizializzazione del nodo e ciclo di vita (Lifecycle)}
-L'architettura software del singolo nodo registry è progettata come un sistema a componenti reattivi guidati dagli eventi e da temporizzatori asincroni. La gestione del ciclo di vita del processo Go, dall'istante di avvio (\textit{bootstrap}) fino allo spegnimento controllato (\textit{graceful shutdown}), segue un flusso sequenziale rigoroso e deterministico, volto a garantire l'integrità dei dati e la coerenza della topologia del cluster.
-
-\subsubsection{Fase di Bootstrapping e Inizializzazione}
-All'atto dell'esecuzione del binario compilato, il processo esegue i seguenti passi fondamentali in ordine sequenziale:
-
-\begin{enumerate}[leftmargin=1.2cm]
-  \item \textbf{Parsing della Configurazione:} Il nodo effettua il caricamento e la validazione di un file di configurazione in formato \textbf{YAML}, mappandolo su una struttura Go strongly-typed. I parametri essenziali estratti includono:
-  \begin{itemize}
-    \item \texttt{node\_id}: Stringa univoca identificativa del nodo all'interno del cluster.
-    \item \texttt{bind\_address} e \texttt{peer\_address}: Gli endpoint di rete per l'esposizione dei servizi gRPC pubblici e interni.
-    \item \texttt{seed\_peers}: Una lista di indirizzi di nodi noti stabili, utilizzati come punto di ingresso per aggregarsi al cluster.
-    \item \texttt{cluster\_params}: Parametri di tuning del protocollo, quali l'intervallo di gossip (\textit{Gossip Interval}) e il fattore di fan-out.
-    \item \texttt{heartbeat\_ttl}: Il Time-To-Live massimo oltre il quale un microservizio registrato viene considerato orfano o non responsivo.
-  \end{itemize}
-
-  \item \textbf{Allocazione delle Strutture Dati in Memoria:} Vengono istanziati i moduli \texttt{ServiceStore} e \texttt{PeerStore}. Entrambi i componenti allocano le proprie tabelle hash interne (\texttt{map} di Go) e configurano le rispettive primitive di sincronizzazione della concorrenza (\texttt{sync.RWMutex}) necessarie a isolare i thread di lettura e scrittura.
-
-  \item \textbf{Ripristino dello Stato (State Restore):} Se la direttiva di configurazione \texttt{storage\_dir} è valorizzata ed è presente uno snapshot valido sul volume persistente, il motore di storage avvia la procedura di ripristino. Il file viene deserializzato in memoria, consentendo al \texttt{ServiceStore} di ricostruire l'ultima vista valida nota prima dell'ultimo spegnimento, riducendo l'overhead di rete durante la successiva fase di sincronizzazione.
-
-  \item \textbf{Auto-Registrazione:} Il nodo inserisce le proprie informazioni identificative (ID, indirizzo gRPC, stato attivo) all'interno del proprio \texttt{PeerStore}, marcando se stesso come primo membro della propria vista di appartenenza al cluster.
-
-  \item \textbf{Attivazione dei Runtime Asincroni e dei Ticker:} Viene avviato il server gRPC principale su una \textit{goroutine} dedicata per non bloccare il thread principale. Simultaneamente, vengono spawnati i cicli di background (\textit{loops}) governati da oggetti \texttt{time.Ticker} di Go. Tra questi, assume rilevanza critica il \textbf{ticker di stale detection}, il quale scatta a intervalli regolari per scansionare il \texttt{ServiceStore} ed eliminare o marcare come \textit{Stale} (scaduti) i record dei servizi il cui \texttt{last\_heartbeat\_timestamp} è inferiore alla soglia determinata dal \texttt{heartbeat\_ttl}.
-\end{enumerate}
-
-
-
-\subsubsection{Fase di Shutdown Controllato (Graceful Leave)}
-Per evitare la persistenza di record fantasma nei peer e facilitare la convergenza immediata della topologia di rete senza attendere i timeout di background, il processo intercetta i segnali di terminazione del sistema operativo (es. \texttt{SIGINT} o \texttt{SIGTERM}) tramite il pacchetto \texttt{os/signal} di Go. 
-
-All'intercettazione del segnale, viene avviata la routine di shutdown strutturato:
-\begin{enumerate}[leftmargin=1.2cm]
-  \item \textbf{Interruzione dei Loop Periodici:} Attraverso l'uso dei contesti nativi di Go (\texttt{context.Context}) e la chiusura di canali di controllo (\textit{cancellation channels}), vengono interrotti in modo pulito tutti i ticker attivi (gossip, stale detection, anti-entropia), impedendo l'invio di nuove richieste di rete.
-  \item \textbf{Notifica di Graceful Leave:} Il nodo effettua una serie di chiamate gRPC sincrone verso i peer attivi presenti nel suo \texttt{PeerStore}, notificando la propria intenzione di abbandonare il cluster (\textit{leave message}). Al ricevimento di questo messaggio, i peer aggiornano immediatamente lo stato di quel nodo in \texttt{Dead} o lo rimuovono dalla lista di gossip senza attendere che scatti la rilevazione per assenza di risposta.
-  \item \textbf{Arresto del Server gRPC:} Infine, viene invocato il metodo \texttt{GracefulStop()} sul server gRPC. Questa primitiva blocca l'accettazione di nuove connessioni, attende l'evasione di tutte le RPC pendenti attualmente in fase di elaborazione e, solo successivamente, rilascia i socket di rete e termina definitivamente il processo Go con codice di uscita zero.
-\end{enumerate}
+Se uno o piu' peer sono spenti, il client riconosce gli errori di disponibilita' e segnala il nodo disattivato invece di interrompere il processo con un'eccezione non gestita. Il runner PowerShell permette inoltre di distinguere la build iniziale dai comandi CLI successivi, evitando ricostruzioni inutili.
 
 \subsection{Gestione dello stato dei servizi e mutazioni di stato}
-Il modulo \texttt{ServiceStore} agisce come una macchina a stati finiti in-memory per ciascun microservizio registrato. Al fine di garantire la coerenza eventuale in un ambiente asincrono, ogni mutazione dello stato locale deve seguire regole rigorose di validazione e versionamento, minimizzando il rischio di corruzione dei dati o di inversione temporale degli aggiornamenti durante le fasi di gossip.
-
-\subsubsection{Procedura di Registrazione (Registration)}
-Quando una nuova istanza di microservizio invia una richiesta tramite l'RPC \texttt{RegisterService}, il nodo ricevente agisce come gateway ed esegue le seguenti operazioni:
-\begin{itemize}
-  \item \textbf{Validazione dei Vincoli:} Viene verificata la presenza dei campi obbligatori nel payload (\texttt{service\_name}, \texttt{service\_id}, \texttt{endpoint} e \texttt{version}). Se uno di questi elementi risulta malformato o assente, la richiesta viene respinta sollevando un errore gRPC di tipo \texttt{InvalidArgument}.
-  \item \textbf{Inizializzazione dello Stato:} Al record viene assegnato lo stato di salute iniziale di default \texttt{SERVING} (o \texttt{HEALTHY}) e viene campionato il timestamp corrente per il campo \texttt{last\_heartbeat\_timestamp}.
-  \item \textbf{Gestione del Versionamento Logico:} Il nodo consulta la mappa interna del \texttt{ServiceStore}:
-  \begin{itemize}
-    \item Se la coppia \texttt{service\_name}/\texttt{service\_id} non è presente, il record viene creato \textit{ex-novo} con una \texttt{logical\_version} pari a $1$.
-    \item Se il servizio è già censito (es. un tentativo di ri-registrazione o sovrascrittura), il nodo incrementa monotonicamente la \texttt{logical\_version} precedente ($\text{versione} = \text{versione} + 1$), garantendo che questa mutazione prevalga sulle repliche distribuite antecedenti.
-  \end{itemize}
-\end{itemize}
+Il modulo \texttt{ServiceStore} rappresenta in memoria lo stato locale delle istanze. Ogni modifica passa da normalizzazione, validazione e versionamento, cosi' da rendere il comportamento prevedibile anche quando gli aggiornamenti arrivano in modo asincrono.
 
 \subsubsection{Meccanismo di Rinnovo (Heartbeat)}
-Il mantenimento della presenza nel registro richiede un flusso continuo di keep-alive da parte del microservizio. Al ricevimento di un'invocazione \texttt{Heartbeat}, il nodo verifica la preesistenza dell'identificativo nel proprio store locale. 
-L'aggiornamento del campo \texttt{last\_heartbeat\_timestamp} e la conferma dello stato \texttt{SERVING} avvengono **condizionatamente**: la coppia identificativa deve esistere e non deve essere marcata come eliminata (\textit{tombstone}). Qualora il servizio fosse sconosciuto o già rimosso dal cluster, l'heartbeat viene esplicitamente rifiutato con un codice di errore, forzando il client a eseguire una nuova procedura di registrazione completa.
+Il servizio mantiene la propria presenza inviando keep-alive. Alla RPC \texttt{Heartbeat}, il nodo controlla che l'istanza esista e non sia una tombstone, quindi aggiorna timestamp e salute. Un heartbeat riferito a un servizio sconosciuto o gia' rimosso viene rifiutato e richiede una nuova registrazione.
 
 \subsubsection{Cancellazione Logica tramite Tombstone}
-In un sistema distribuito decentralizzato, l'eliminazione fisica immediata di un record da un nodo locale è un'operazione deleteria: se il nodo $A$ elimina un record e successivamente scambia i dati via gossip con il nodo $B$ (che possiede ancora quel record), il nodo $A$ re-imparerà erroneamente l'esistenza del servizio eliminato, un fenomeno noto come \textit{phantom update}.
-
-Per ovviare a questo problema, il progetto implementa il pattern della \textbf{Tombstone} (cancellazione logica):
+Per evitare che un vecchio messaggio faccia riapparire un servizio rimosso, il progetto usa il pattern \textbf{Tombstone}:
 \begin{itemize}
-  \item All'atto della \texttt{DeregisterService}, i metadati operativi del record (\texttt{endpoint} e \texttt{version}) vengono svuotati o azzerati.
-  \item Lo stato viene impostato permanentemente su \texttt{NOT\_SERVING} (o \texttt{DELETED}).
-  \item La \texttt{logical\_version} viene categoricamente incrementata.
+  \item \texttt{DeregisterService} svuota endpoint e versione applicativa.
+  \item Lo stato viene portato a \texttt{NOT\_SERVING}.
+  \item \texttt{logical\_version} viene incrementata per dare priorita' alla cancellazione.
 \end{itemize}
-In questo modo, la cancellazione si propaga sulla rete sotto forma di aggiornamento ad alta priorità. I peer che ricevono la tombstone via gossip noteranno la versione logica superiore e applicheranno la cancellazione logica anche sui propri store. La rimozione fisica definitiva del record (\textit{garbage collection}) avverrà solo dopo un periodo di tempo sufficientemente lungo da garantire che la tombstone abbia raggiunto l'intero cluster.
+La cancellazione viaggia quindi come un normale aggiornamento ma con versione piu' alta. I peer la applicano durante il merge e non accettano record precedenti. L'eventuale rimozione fisica puo' essere rimandata fino alla propagazione completa.
 
 
 
 \subsubsection{Rilevazione Automatica delle Scadenze (Stale Detection)}
-Per gestire i crash non controllati dei microservizi (in cui l'istanza smette di funzionare senza poter invocare la deregistrazione), il modulo runtime esegue un ciclo di \textbf{Stale Detection} guidato da un ticker periodico indipendente. 
+Per gestire un microservizio che termina senza deregistrarsi, il runtime esegue una \textbf{Stale Detection} periodica tramite ticker indipendente.
 
-Il processo esegue una scansione lineare del \texttt{ServiceStore} calcolando il delta temporale per ciascun servizio attivo:
+Per ogni servizio attivo viene calcolato il tempo trascorso dall'ultimo heartbeat:
 $$\Delta t = t_{\text{current}} - t_{\text{last\_heartbeat}}$$
-Se $\Delta t > \text{TTL}$, il servizio viene considerato instabile o spento. Il nodo non elimina il record, ma applica localmente la stessa logica della tombstone: incrementa la \texttt{logical\_version} e muta lo stato in \texttt{NOT\_SERVING}. Sebbene questo rilevamento avvenga su base puramente locale (poiché guidato dall'orologio del nodo proprietario o del nodo che rileva lo stale), l'incremento della versione logica fa sì che l'informazione di obsolescenza venga distribuita in modo deterministico a tutto il cluster tramite i successivi cicli di gossip, portando alla convergenza dello stato globale.
+Se $\Delta t > \text{TTL}$, il servizio viene considerato non disponibile. Il record non viene cancellato: viene trasformato in una tombstone con versione incrementata e stato \texttt{NOT\_SERVING}, cosi' l'informazione puo' essere replicata agli altri nodi.
 
 \subsection{Protocollo di replica gossip e riconciliazione dello stato}
-Il cuore della decentralizzazione del sistema risiede nel modulo \texttt{Runtime Gossip}. Per garantire la convergenza dello stato verso una consistenza eventuale senza gravare sulla rete con protocolli di consenso sincroni e bloccanti, il runtime esegue in parallelo quattro cicli di background (\textit{loops}) asincroni. Ognuno di essi è governato da un proprio timer indipendente e gestisce un aspetto specifico della sincronizzazione o della gestione della topologia.
+La componente \texttt{Runtime Gossip} realizza la sincronizzazione decentralizzata. Invece di bloccare l'intero cluster con un consenso sincrono, esegue quattro loop indipendenti, ciascuno dedicato a una responsabilita' specifica e regolato dal proprio intervallo temporale.
 
 \subsubsection{I Quattro Loop di Background del Runtime}
 
 \begin{itemize}[leftmargin=1.2cm]
-  \item \textbf{Bootstrap Loop (Cluster Discovery):} Operando a intervalli regolari (specialmente all'avvio o in caso di isolamento), questo ciclo invia richieste \texttt{JoinCluster} verso l'elenco dei \textit{seed peers} configurati nello YAML. Lo scopo è duplice: annunciare la propria presenza per essere inseriti nelle tabelle di routing dei peer stabili e ricevere in risposta la lista aggiornata dei nodi attualmente attivi nel cluster, popolando dinamicamente il \texttt{PeerStore} locale oltre la configurazione statica iniziale.
+  \item \textbf{Bootstrap Loop (Cluster Discovery):} a intervalli regolari invia \texttt{JoinCluster} ai seed peer configurati. Il nodo si annuncia, viene inserito nella membership remota e riceve l'elenco aggiornato dei peer da aggiungere al proprio \texttt{PeerStore}.
   
-  \item \textbf{Gossip Loop (Push Epidemico / Rumor Mongering):} È il motore primario di diffusione rapida delle novità. A intervalli ad alta frequenza (es. ogni $500\text{ ms}$), il nodo seleziona in modo pseudo-casuale un sottoinsieme ristretto di destinatari dal proprio \texttt{PeerStore}, definito dal parametro di \textit{fan-out} ($k$). Verso questi nodi invia un messaggio \texttt{GossipSync} contenente gli ultimi aggiornamenti del proprio \texttt{ServiceStore}. La propagazione segue un modello epidemico altamente resiliente: la probabilità che un'informazione non raggiunga l'intero cluster decade esponenzialmente al crescere dei cicli di trasmissione.
+  \item \textbf{Gossip Loop (Push epidemico):} seleziona pseudo-casualmente fino a $k$ peer dal \texttt{PeerStore} e invia loro un messaggio \texttt{GossipSync}. L'informazione si diffonde in piu' direzioni senza richiedere che ogni nodo conosca immediatamente l'intera topologia.
   
-  \item \textbf{Reconcile Loop (Anti-Entropy Pull):} Mentre il gossip push è ottimizzato per la velocità, il ciclo di riconciliazione garantisce la robustezza a lungo termine contro la perdita di pacchetti o il partizionamento della rete. Eseguito a intervalli più lunghi (es. ogni $10\text{ s}$), il nodo sceglie un peer attivo e avvia uno scambio in modalità \textit{pull} invocando la RPC \texttt{PullState}. La richiesta include il parametro \texttt{since\_unix}, una marcatura temporale che indica l'ultimo allineamento eseguito. Il peer risponde inviando in modo incrementale solo i record modificati o creati successivamente a quel timestamp, riducendo drasticamente l'uso della banda rispetto a un trasferimento totale dello snapshot.
+  \item \textbf{Reconcile Loop (Anti-Entropy Pull):} opera piu' lentamente del gossip e interroga un peer con \texttt{PullState}. Il parametro \texttt{since\_unix} consente di chiedere gli aggiornamenti successivi all'ultimo allineamento, recuperando le informazioni perse durante errori o partizioni.
   
-  \item \textbf{Peer Sweep Loop (Membership Pruning):} Questo ciclo monitora la salute interna del cluster stesso. Scansiona periodicamente il \texttt{PeerStore} e calcola il tempo trascorso dall'ultima interazione gRPC riuscita con ciascun peer. Se un nodo non risponde ai messaggi o non invia alcun segnale per un tempo superiore alla soglia di tolleranza preimpostata, il suo stato viene mutato in \texttt{Suspect} e, successivamente, rimosso dal pool dei nodi attivi (\textit{eviction}), isolando i nodi permanentemente spenti dal flusso del gossip.
+  \item \textbf{Peer Sweep Loop (Membership Pruning):} controlla l'eta' dell'ultima interazione con ciascun peer. Se il limite \texttt{peer\_timeout\_seconds} viene superato, il peer viene rimosso dalla membership attiva e non viene piu' scelto per le comunicazioni successive.
 \end{itemize}
 
 \subsubsection{Meccanismi Sinergici per la Convergenza}
-La consistenza eventuale dello stato globale del registro non è delegata a un singolo algoritmo, ma si ottiene mediante la combinazione sinergica e matematica di tre strategie complementari orientate a massimizzare la tolleranza ai guasti:
+La consistenza eventuale nasce dalla combinazione di tre strategie complementari:
 
 \begin{enumerate}[leftmargin=1.2cm]
-  \item \textbf{Propagazione Epidemica Proattiva (Gossip Push):} Garantisce che ogni nuova mutazione di stato (come una registrazione o l'applicazione di una \textit{tombstone}) si diffonda nel cluster in tempo sub-lineare ($O(\log N)$, dove $N$ è il numero di nodi). È la prima linea di difesa per mantenere i registri allineati in condizioni operative normali.
+  \item \textbf{Propagazione proattiva (Gossip Push):} diffonde rapidamente registrazioni e tombstone verso piu' peer, fornendo il percorso principale di replica durante il funzionamento normale.
   
-  \item \textbf{Riallineamento Incrementale Reattivo (Reconcile Pull):} Agisce come un meccanismo di *anti-entropia*. Colma i gap informativi causati da congestione di rete, messaggi gRPC persi o dal riavvio di un nodo dopo un crash prolungato. L'approccio *pull* incrementale garantisce che, anche se un nodo perde la fase di push epidemico, recupererà lo stato corretto al successivo ciclo di riconciliazione.
+  \item \textbf{Riallineamento reattivo (Reconcile Pull):} colma i vuoti lasciati da messaggi persi, congestione o riavvii, permettendo al nodo di recuperare lo stato dal peer interrogato.
   
-  \item \textbf{Ri-bootstrap Periodico su Nodi Seme (Seed Resiliency):} Impedisce la frammentazione del cluster in sotto-reti isolate (fenomeno del \textit{network split}). Nel caso in cui un partizionamento transitorio della rete causi l'azzeramento o l'obsolescenza del \texttt{PeerStore} locale, il riesame ciclico dei \textit{seed peers} permette ai nodi di ricollegarsi alla spina dorsale stabile del cluster, innescando nuovamente il recupero dello stato.
+  \item \textbf{Ri-bootstrap sui seed peer:} mantiene un punto di rientro nella rete quando la membership locale diventa incompleta o un nodo torna operativo dopo una separazione temporanea.
 \end{enumerate}
 
-\subsection{Politica di merge e risoluzione deterministica dei conflitti}
-La natura asincrona e decentralizzata del protocollo di gossip implica che i nodi ricevano costantemente vettori di stato da peer differenti, potenzialmente disordinati, duplicati o ritardati a causa delle latenze di rete (\textit{out-of-order delivery}). Per garantire che tutti i nodi convergano verso la medesima vista logica senza l'ausilio di un coordinatore centrale o di lock distribuiti, il sistema applica una politica di \textbf{merge deterministica e isolata} sul singolo \texttt{ServiceRecord}. 
+\section{Gestione della Fault Tolerance}
+\label{sec:fault_tolerance}
 
-La funzione di merge agisce come una funzione di commutazione parziale che deve soddisfare le proprietà algebriche di un semireticolo superiore (\textit{bounded join-semilattice}): deve essere **idempotente** ($A \sqcup A = A$), **commutativa** ($A \sqcup B = B \sqcup A$) e **associativa** ($(A \sqcup B) \sqcup C = A \sqcup (B \sqcup C)$). 
+La fault tolerance del progetto combina ridondanza, monitoraggio e riallineamento. I tre registry conservano viste locali ma non dipendono da un coordinatore permanente; il guasto di un container puo' quindi ridurre la conoscenza locale senza rendere indisponibile la discovery sui peer rimasti attivi.
 
-Quando un nodo riceve un record remoto $R_{\text{remote}}$ per un servizio identificato dalla coppia \texttt{service\_name}/\texttt{service\_id}, lo confronta con il corrispondente record locale $R_{\text{local}}$ applicando una cascata di regole gerarchiche e strettamente deterministiche:
+\subsection{Rilevazione dei guasti}
+Il controllo opera su due livelli. Per i servizi applicativi, ogni heartbeat aggiorna \texttt{last\_heartbeat\_unix}; il ticker di \texttt{MarkStale} confronta questo valore con \texttt{heartbeat\_ttl\_seconds} e marca l'istanza come \texttt{NOT\_SERVING} quando il TTL scade.
 
-\begin{enumerate}[leftmargin=1.2cm]
-  \item \textbf{Priorità Assoluta alla Versione Logica (\texttt{logical\_version}):} 
-  Il primo livello di sbarramento valuta il contatore monotonico del record. L'aggiornamento viene accettato se e solo se la versione remota è strettamente maggiore di quella locale:
-  $$\text{Se } R_{\text{remote}}.\texttt{logical\_version} > R_{\text{local}}.\texttt{logical\_version} \implies \text{Accetta } R_{\text{remote}}$$
-  Questo meccanismo cattura la causalità logica delle mutazioni (registrazioni, deregistrazioni, cambi di stato) indipendentemente dal tempo fisico. Se la versione remota è minore, il pacchetto viene scartato poiché considerato obsoleto.
-  
-  \item \textbf{Primo Tie-Break - Timestamp di Mutazione (\texttt{updated\_at\_unix}):} 
-  Qualora le versioni logiche coincidano ($R_{\text{remote}}.\texttt{logical\_version} == R_{\text{local}}.\texttt{logical\_version}$), si rende necessario risolvere un potenziale conflitto di modifiche concorrenti basandosi sul tempo fisico. Viene confrontato il timestamp di ultima modifica della struttura dati (\texttt{updated\_at\_unix}), adottando la politica del \textit{Last-Write-Wins} (LWW): prevale il record che presenta la marcatura temporale Unix più recente.
-  
-  \item \textbf{Secondo Tie-Break - Timestamp di Vitalità (\texttt{last\_heartbeat\_unix}):} 
-  In caso di ulteriore parità (stessa versione logica e stesso timestamp di mutazione), il sistema analizza il timestamp dell'ultimo segnale di keep-alive ricevuto dal microservizio (\texttt{last\_heartbeat\_unix}). Il record con l'heartbeat più recente viene considerato più aggiornato rispetto allo stato di salute effettivo dell'istanza e viene eletto come nuovo stato locale.
-  
-  \item \textbf{Tie-Break Finale su Campi Strutturali:} 
-  Nell'altamente improbabile scenario in cui tutti i parametri quantitativi e temporali precedentemente elencati risultino identici, il sistema ricorre a una regola di fallback puramente deterministica per evitare l'indeterminatezza algoritmica. Si esegue un confronto lessicografico o binario sequenziale sui restanti campi strutturali del payload, nell'ordine: \texttt{health\_status}, \texttt{owner\_node\_id}, \texttt{endpoint} e \texttt{version}. Questo garantisce che, indipendentemente dal nodo in cui viene eseguito il merge, la scelta finale ricada in modo univoco e identico sullo stesso record.
-\end{enumerate}
+Per i registry, il runtime registra l'ultima interazione con ogni peer. Superato \texttt{peer\_timeout\_seconds}, il peer non raggiungibile viene eliminato dal \texttt{PeerStore} attivo e non viene piu' selezionato per gossip o reconcile.
 
-Attraverso questa rigorosa gerarchia decisionale, l'operazione di convergenza non richiede alcuna forma di negoziazione tra i nodi del cluster. La convergenza finale dello stato tra nodi registry isolati è garantita matematicamente non appena tutti i messaggi di gossip incrociati completano la loro propagazione nella rete di trasporto.
+\subsection{Replica e recupero dello stato}
+Le registrazioni vengono diffuse con \texttt{GossipSync} verso un insieme limitato di peer. Il ciclo \textit{reconcile} interroga periodicamente un altro nodo tramite \texttt{PullState}, recuperando le modifiche perse durante un errore o un isolamento.
 
-\subsection{Modello di persistenza locale e salvataggio atomico}
-Sebbene il registro dei servizi operi prevalentemente in memoria per garantire risposte a bassissima latenza alle richieste di discovery, la tolleranza ai guasti richiede una strategia di durabilità dei dati. Il sistema implementa un meccanismo di persistenza locale basato su **snapshot JSON periodici ed espliciti**, memorizzati all'interno di una directory mappata su un volume Docker dedicato e persistente per ciascun singolo nodo.
+\texttt{logical\_version} ordina le mutazioni. Il merge applica soltanto record piu' recenti dello stato locale, rendendo idempotenti i messaggi duplicati e innocui quelli ricevuti fuori ordine.
 
-\subsubsection{Scrittura Atomica sul File System (Double-Buffering Pattern)}
-Per prevenire la corruzione dei dati causata da crash improvvisi del processo o del container durante la fase stessa di scrittura su disco (che lascerebbe il file JSON in uno stato parziale o malformato), il motore di storage adotta una strategia di scrittura atomica in due fasi, mutuata dai pattern operativi dei \textit{file system POSIX-compliant}:
+\subsection{Crash, recovery e graceful leave}
+La fault injection arresta intenzionalmente \texttt{registry-node-2}. I peer superstiti continuano a rispondere alle richieste e rimuovono il nodo fermo dopo il timeout. Al riavvio, il processo Go ricostruisce membership e record tramite seed peer, gossip e reconcile.
 
-\begin{enumerate}[leftmargin=1.2cm]
-  \item \textbf{Scrittura su File Temporaneo:} All'attivazione del trigger di persistenza (guidato da una mutazione dello stato o da un timer di background), il \texttt{ServiceStore} viene bloccato in lettura. Il payload complessivo dello store viene serializzato in formato JSON e riversato all'interno di un file temporaneo univoco (es. \texttt{registry\_snapshot.tmp}) allocato nella stessa directory di destinazione.
-  \item \textbf{Sostituzione Atomica via Rename:} Una volta completata con successo la scrittura e flushato il buffer sul disco, il runtime esegue la chiamata di sistema di rinomina (\texttt{os.Rename} in Go, che si mappa sulla \textit{syscall} atomica \texttt{rename(2)} del kernel Linux). Il file temporaneo va a sovrascrivere istantaneamente il file di produzione definitivo denominato \texttt{registry\_snapshot.json}.
-\end{enumerate}
+Il protocollo distingue un crash da uno shutdown ordinato. Con \texttt{GracefulLeave} il nodo comunica l'uscita ai peer, che lo rimuovono senza attendere il timeout, riducendo il tempo di convergenza.
 
-Grazie a questa atomicità a livello di kernel, il file di snapshot consolidato passa istantaneamente dalla versione precedente a quella successiva. Se il nodo subisce un crash distruttivo esattamente durante la scrittura, al riavvio il file temporaneo incompleto verrà semplicemente ignorato o rimosso, mentre il file \texttt{registry\_snapshot.json} originale rimarrà integro e leggibile.
+\subsection{Tombstone e continuita' del registro}
+La deregistrazione e lo stale detection non cancellano subito il record. Il registry crea una \textit{tombstone}, azzera endpoint e versione applicativa, assegna \texttt{NOT\_SERVING} e incrementa \texttt{logical\_version}. La cancellazione viene cosi' replicata come una mutazione piu' recente e impedisce il ritorno di copie obsolete.
 
-\subsubsection{Flusso di Riavvio e Abbattimento del Warm-Up Time}
-La persistenza locale altera radicalmente il comportamento del nodo in fase di ripartenza post-crash, ottimizzando la metrica del \textit{Recovery Time Objective} (RTO):
+Il client prova gli endpoint disponibili e tratta l'errore di un singolo peer come indisponibilita' locale. Le richieste possono quindi proseguire sui nodi superstiti, realizzando una degradazione controllata.
 
-\begin{itemize}[leftmargin=1.2cm]
-  \item \textbf{Fase di Cold-Start (Senza Persistenza):} Un nodo riavviato partirebbe con uno store vuoto. Dovrebbe attendere passivamente i cicli di gossip dei peer o forzare un pesante \textit{pull state} totale per ricostruire l'intera tabella dei servizi, generando un picco di traffico di rete e un transitorio di indisponibilità locale delle API (fase di \textit{warm-up}).
-  \item \textbf{Fase di Fast-Boot (Con Persistenza Attiva):} Durante l'inizializzazione, il nodo rileva il file \texttt{registry\_snapshot.json}, lo deserializza e ripopola istantaneamente il \texttt{ServiceStore} locale con l'ultimo stato noto pre-crash. Sebbene questa vista possa essere parzialmente obsoleta (mancando delle mutazioni avvenute durante il downtime del nodo), essa costituisce una base di partenza solida ad alta fedeltà.
-\end{itemize}
-
-Immediatamente dopo il caricamento dello snapshot, il runtime attiva i loop di \texttt{Gossip} e \texttt{Reconcile}. Il nodo scambia i propri vettori di versione con i peer superstiti: i meccanismi di anti-entropia dovranno veicolare sulla rete solo le variazioni incrementali accumulate durante il periodo di assenza. Questo approccio ibrido (stato locale + delta distribuito) riduce a frazioni di secondo il tempo di warm-up del registro, minimizzando l'impatto operativo sul cluster.
-
-\section{Deployment e operatività dell'infrastruttura}
-
-\subsection{Containerizzazione e orchestrazione locale}
-Per garantire l'isolamento dei processi, la riproducibilità dell'ambiente di esecuzione e la simulazione realistica di un cluster di calcolo distribuito, l'intera infrastruttura è containerizzata e orchestrata tramite \textbf{Docker Compose}. Il file di specifica \texttt{docker-compose.yml} formalizza la topologia della rete e astrae la complessità del deployment locale, definendo in modo dichiarativo un ecosistema composto da tre nodi registry cooperanti e da un'utilità di controllo.
-
-\subsubsection{Configurazione e Anatomia dei Nodi Registry}
-I tre servizi di calcolo (convenzionalmente denominati \texttt{registry-1}, \texttt{registry-2} e \texttt{registry-3}) sono istanziati a partire dalla medesima immagine applicativa standard, generata tramite un processo di build multi-stage in Go. Ciascun container viene configurato in modo isolato agendo sui seguenti canali operativi:
-
-\begin{itemize}[leftmargin=1.2cm]
-  \item \textbf{Iniezione della Configurazione Dedicata:} Ogni istanza riceve un file di configurazione YAML specifico (o variabili d'ambiente equivalenti) tramite il meccanismo dei \textit{bind mounts} o dei volumi di Docker. Questo permette di assegnare a ciascun container un \texttt{node\_id} univoco e di istruire il runtime su quali siano gli indirizzi di rete dei peer stabili per la fase di bootstrap.
-  \item \textbf{Mappatura delle Porte Host (Port Forwarding):} All'interno della rete virtuale Docker, tutti i nodi possono ascoltare sulla medesima porta gRPC standard (es. la porta $50051$). Tuttavia, per consentire l'interazione diretta da parte del sistema ospite (\textit{Host OS}) o di tool di debug esterni, le porte dei container vengono esposte e mappate su porte distinte e sequenziali dell'host:
-  \begin{itemize}
-    \item \texttt{registry-1} $\longrightarrow$ porta host \texttt{50051}
-    \item \texttt{registry-2} $\longrightarrow$ porta host \texttt{50052}
-    \item \texttt{registry-3} $\longrightarrow$ porta host \texttt{50053}
-  \end{itemize}
-  \item \textbf{Isolamento dello Stato tramite Volumi Dedicati:} Per validare l'efficacia dei meccanismi di persistenza locale e prevenire conflitti di sovrascrittura sul file system, Docker Compose alloca tre volumi logici denominati e indipendenti (es. \texttt{registry\_data\_1}, \texttt{registry\_data\_2}, \texttt{registry\_data\_3}). Ogni volume viene montato internamente al rispettivo container in corrispondenza della directory di storage definita nello YAML (\texttt{storage\_dir}). Questo garantisce che il ciclo di vita dei dati persistiti sia disaccoppiato da quello del container: un comando di \texttt{docker compose down} seguito da un \texttt{up} non causerà la perdita degli snapshot JSON.
-\end{itemize}
-
-\subsubsection{Isolamento di Rete (Network Bridge)}
-I container sono inseriti all'interno di una rete virtuale isolata di tipo \textbf{bridge} creata esplicitamente dal demone Docker. All'interno di questa subnet, il server DNS integrato in Docker consente la risoluzione dinamica dei nomi dei servizi. Di conseguenza, i nodi non hanno bisogno di conoscere preventivamente gli indirizzi IP statici dei peer, ma possono configurare il proprio \texttt{PeerStore} utilizzando direttamente gli hostname logici (es. \texttt{dns://registry-2:50051}).
-
-\subsubsection{Il Tool di Supporto: Service CLI}
-Insieme ai nodi del cluster, il file di orchestrazione definisce un servizio aggiuntivo denominato \texttt{service-cli}. Questo container, che condivide la medesima rete bridge dei registri, non ospita un demone persistente ma funge da tool \textit{ad-hoc} a riga di comando. 
-
-Il client CLI è preposto a iniettare stimoli nel sistema e verificarne le risposte. Essendo interno alla rete virtuale, può connettersi a qualsiasi nodo del cluster ed eseguire chiamate gRPC simulate (come la registrazione di un microservizio di test o l'invio di heartbeat campionati) agendo da sonda operativa per raccogliere le metriche di convergenza e tolleranza ai guasti descritte negli scenari dimostrativi.
-
-\subsection{Automazione del ciclo di vita e testing tramite Makefile}
-La gestione operativa di un sistema distribuito, composto da molteplici nodi cooperanti, interfacce di rete e contratti di serializzazione da compilare, introduce un'elevata complessità di coordinamento. Al fine di garantire la massima riproducibilità degli scenari di test, azzerare l'errore umano e fornire un'interfaccia di interazione unificata e dichiarativa, l'intero ciclo di vita del progetto è centralizzato e automatizzato mediante un file \texttt{Makefile} strutturato per l'utility \textbf{GNU Make}.
-
-L'automazione si articola su quattro macro-aree funzionali, mappate su target chiari e sequenziali:
-
-\begin{itemize}[leftmargin=1.2cm]
-  \item \textbf{Verifica della Qualità del Codice (Build, Test e Lint):} 
-  Il \texttt{Makefile} astrae i comandi della \textit{toolchain} di Go. Mediante target dedicati (es. \texttt{make build}, \texttt{make test}), esegue la compilazione statica dei binari ottimizzati, l'esecuzione della suite di \textit{unit testing} (sfruttando le primitive native del pacchetto \texttt{testing} di Go) e l'analisi statica del codice (\textit{linting}). Quest'ultima fase assicura la conformità del codice agli standard idiomatici del linguaggio e previene l'introduzione di potenziali \textit{race conditions} o memory leak prima del deployment.
-  
-  \item \textbf{Compilazione dei Contratti di Rete (Protobuf Generation):} 
-  Per evitare il disallineamento dei tipi e delle interfacce gRPC, il target \texttt{make proto} automatizza l'invocazione del compilatore \texttt{protoc} e dei relativi plugin per Go (\texttt{protoc-gen-go} e \texttt{protoc-gen-go-grpc}). Il comando scansiona i file di specifica \texttt{.proto}, generando in modo deterministico il codice sorgente stub per i servizi \texttt{ServiceRegistry} e \texttt{RegistryPeer}, isolando lo sviluppatore dalla gestione manuale delle dipendenze di compilazione.
-  
-  \item \textbf{Orchestrazione Semplificata dell'Infrastruttura:} 
-  I comandi di gestione dei container Docker Compose vengono incapsulati in target ad alto livello come \texttt{make compose-up-d}, \texttt{make compose-down} e \texttt{make trace-up}. Questo approccio garantisce la corretta sequenzialità delle operazioni, ad esempio assicurando che i volumi Docker residui vengano interamente purgati tra una sessione di test e la successiva, garantendo così uno stato iniziale del cluster sempre pulito ed esente da contaminazioni (\textit{idempotenza del deployment}).
-  
-  \item \textbf{Scripting di Scenario e Fault Injection (\texttt{trace-cover}):} 
-  Il punto di forza dell'automazione risiede nel target \texttt{make trace-cover}. Questo comando non si limita ad avviare i container, ma esegue uno script Bash o Go ad-hoc che agisce come un vero e proprio orchestratore di test end-to-end. Il target implementa tecniche di \textbf{Fault Injection} controllato:
-  \begin{enumerate}
-    \item Interroga i nodi tramite il container \texttt{service-cli} per verificare lo stato iniziale.
-    \item Inietta un fallimento simulato spegnendo bruscamente un container specifico (\texttt{docker stop}).
-    \item Monitora i log in tempo reale e interroga i nodi superstiti per calcolare analiticamente il tempo di convergenza e la latenza di riconciliazione del protocollo di gossip.
-    \item Riattiva il nodo interrotto e convalida la corretta esecuzione della procedura di \textit{recovery}.
-  \end{enumerate}
-\end{itemize}
-
-\subsubsection{Riproducibilità Accademica e Validazione in Sede d'Esame}
-L'approccio basato su \texttt{Makefile} eleva il progetto dal punto di vista metodologico, trasformandolo in un laboratorio software autosufficiente e deterministico. L'astrazione totale dei comandi infrastrutturali garantisce che chiunque — sia in fase di sviluppo locale, sia in sede di valutazione accademica — possa riprodurre l'intero scenario di validazione distribuita con un singolo comando. Ciò dimostra come la complessità operativa dei sistemi decentralizzati possa essere efficacemente governata mediante una rigorosa cultura dell'automazione e del testing continuo.
+La procedura e' verificabile con lo script operativo del progetto:
+\begin{verbatim}
+.\scripts\dev.ps1 trace-up
+.\scripts\dev.ps1 select-service -profile random
+.\scripts\dev.ps1 register
+.\scripts\dev.ps1 discovery
+.\scripts\dev.ps1 deregister
+.\scripts\dev.ps1 down
+\end{verbatim}
+La sequenza ricrea il cluster, registra un servizio, verifica la discovery, mantiene la presenza tramite heartbeat e rimuove infine il servizio e l'infrastruttura di test. Il test d'integrazione esteso replica inoltre crash, pruning dei peer, persistenza dello snapshot, resume del nodo e convergenza della deregistrazione.
 
 \section{Strategia di test e validazione}
-\subsection{Test unitari}
-Sono presenti test mirati su:
-\begin{itemize}[leftmargin=1.2cm]
-  \item validazione API service server;
-  \item gestione heartbeat e transizione a \texttt{NOT\_SERVING};
-  \item semantica di deregistrazione;
-  \item comportamento runtime gossip su bootstrap, push e pull;
-  \item store dei peer e meccanismi di pruning.
-\end{itemize}
+La validazione comprende test unitari, test sui server gRPC, test di integrazione e prove Docker. I test unitari verificano regole applicative, validazione, versionamento, heartbeat e tombstone; i test gRPC coprono registrazione, discovery, deregistrazione, idempotenza e membership.
 
-\subsection{Test di integrazione multi-nodo}
-I test di integrazione verificano scenari end-to-end:
-\begin{enumerate}[leftmargin=1.2cm]
-  \item convergenza gossip tra tre nodi;
-  \item crash di un nodo e sua rimozione dalla peer view;
-  \item resume con persistenza e riallineamento dello stato;
-  \item propagazione della deregistrazione (tombstone convergence);
-  \item graceful leave senza attendere timeout peer.
-\end{enumerate}
+I test di integrazione avviano nodi su porte temporanee e controllano convergenza dei servizi, pruning dopo crash, persistenza e ripristino dello snapshot, riallineamento del nodo riavviato, propagazione della deregistrazione e graceful leave senza attesa del timeout.
 
-La copertura funzionale e quindi coerente con i requisiti di robustezza richiesti in un registro distribuito.
+La suite standard si esegue con:
+\begin{verbatim}
+go test ./...
+\end{verbatim}
 
-\section{Analisi critica: punti di forza e limiti}
-\subsection{Punti di forza}
-\begin{itemize}[leftmargin=1.2cm]
-  \item Architettura semplice e modulare, adatta a scopi didattici e sperimentali.
-  \item Assenza di single point of failure a livello di registry.
-  \item Replica eventual-consistent con buona resilienza a fault transitori.
-  \item Persistenza locale sufficiente per recovery rapido nei casi di crash singolo.
-\end{itemize}
+Il ciclo containerizzato si riproduce con:
+\begin{verbatim}
+.\scripts\dev.ps1 trace-up
+.\scripts\dev.ps1 select-service -profile random
+.\scripts\dev.ps1 register
+.\scripts\dev.ps1 discovery
+.\scripts\dev.ps1 deregister
+.\scripts\dev.ps1 down
+\end{verbatim}
 
-\subsection{Limiti tecnici}
-\begin{itemize}[leftmargin=1.2cm]
-  \item Consistenza solo eventuale: possibile lettura temporaneamente stale.
-  \item Comunicazioni gRPC in chiaro (assenza TLS/mTLS) nel setup corrente.
-  \item Nessun quorum o consenso forte; non adatto a requisiti strict-serializable.
-  \item Mancano metriche/telemetria integrate per osservabilità di produzione.
-  \item Il folder \texttt{cmd/demo-service} è vuoto: il progetto usa CLI per simulare il service lifecycle, ma non include un microservizio demo persistente completo.
-\end{itemize}
-
-\subsection{Miglioramenti proposti}
-\begin{enumerate}[leftmargin=1.2cm]
-  \item Introduzione di autenticazione e cifratura mTLS tra peer e client.
-  \item Aggiunta di metriche Prometheus (latenza gossip, convergenza, peer churn).
-  \item Garbage collection controllata delle tombstone.
-  \item Politiche di backoff e retry più evolute sulle connessioni peer.
-  \item Eventuale backend persistente condiviso (o consenso Raft) per modalità strong consistency opzionale.
-\end{enumerate}
-
+La build delle immagini viene eseguita nella fase iniziale; i comandi CLI successivi riutilizzano l'immagine gia' disponibile. Per la fault injection si arresta e si riavvia \texttt{registry-node-2}, osservando risposte, pruning e recupero dello stato.
 \section{Conclusioni}
-Il progetto soddisfa in modo convincente gli obiettivi tipici di un registro distribuito in ambito didattico SDCC: discovery decentralizzata, propagazione dello stato, tolleranza a crash parziali, recovery e verifica sperimentale ripetibile.
+Il progetto realizza un registro distribuito con tre nodi cooperanti, API gRPC tipizzate e replica gossip. Heartbeat, TTL, versionamento, tombstone, pruning e reconcile coprono sia l'assenza di un servizio sia l'arresto temporaneo di un registry.
 
-Dal punto di vista universitario, il lavoro mostra una buona padronanza dei concetti di sistemi distribuiti applicati in pratica:
-\begin{itemize}[leftmargin=1.2cm]
-  \item separazione tra API utente e API inter-nodo;
-  \item gestione del ciclo di vita dei servizi con heartbeat e TTL;
-  \item convergenza tramite gossip + reconcile;
-  \item ragionamento su conflitti, versionamento logico e tombstone.
-\end{itemize}
+La separazione tra dominio, applicazione, adapter, storage, gossip e bootstrap rende piu' chiari i confini del codice. Docker Compose e \texttt{scripts/dev.ps1} forniscono inoltre un ambiente riproducibile per build, test, discovery e simulazione dei guasti.
 
-In sintesi, la soluzione è adeguata per una discussione accademica perché unisce chiarezza architetturale, implementazione concreta e una strategia di test coerente con gli obiettivi di resilienza.
+Nel complesso, la soluzione mostra come ottenere disponibilita' e consistenza eventuale senza un coordinatore centrale, mantenendo strumenti concreti per osservare e verificare il comportamento del cluster.
 
 \end{document}
