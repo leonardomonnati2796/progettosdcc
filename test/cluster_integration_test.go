@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -36,17 +35,17 @@ type testNode struct {
 }
 
 func startTestNode(t *testing.T, id string, seedPeers []string) *testNode {
-// Avvia l'esecuzione del componente.
+	// Avvia l'esecuzione del componente.
 	return startTestNodeWithPersistenceAndPeerTimeout(t, id, seedPeers, "", 2)
 }
 
 func startTestNodeWithPersistence(t *testing.T, id string, seedPeers []string, storageDir string) *testNode {
-// Avvia l'esecuzione del componente.
+	// Avvia l'esecuzione del componente.
 	return startTestNodeWithPersistenceAndPeerTimeout(t, id, seedPeers, storageDir, 2)
 }
 
 func startTestNodeWithPersistenceAndPeerTimeout(t *testing.T, id string, seedPeers []string, storageDir string, peerTimeoutSeconds int) *testNode {
-// Avvia l'esecuzione del componente.
+	// Avvia l'esecuzione del componente.
 	t.Helper()
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -68,28 +67,15 @@ func startTestNodeWithPersistenceAndPeerTimeout(t *testing.T, id string, seedPee
 			PeerTimeoutSeconds:       peerTimeoutSeconds,
 			MaxGossipFanout:          2,
 		},
-		Service: config.RegistryServiceConfig{HeartbeatTTLSeconds: 6},
 	}
 
 	serviceStore := storage.NewServiceStore()
 	peerStore := storage.NewPeerStore()
-	if storageDir != "" {
-		snapshot, err := storage.LoadSnapshot(storageDir)
-		if err != nil {
-			t.Fatalf("snapshot load failed: %v", err)
-		}
-		serviceStore.ReplaceAll(snapshot.Services)
-		peerStore.ReplaceAll(snapshot.Peers)
-		saveSnapshot := func() {
-			_ = storage.SaveSnapshot(storageDir, serviceStore.List(), peerStore.List())
-		}
-		serviceStore.SetOnChange(saveSnapshot)
-		peerStore.SetOnChange(saveSnapshot)
-	}
+	_ = storageDir
 	peerStore.UpsertSelf(id, address, time.Now().Unix())
 
 	grpcServer := grpc.NewServer()
-	serviceServer := registry.NewServiceRegistryServer(serviceStore, id, 6*time.Second)
+	serviceServer := registry.NewServiceRegistryServer(serviceStore, id)
 	peerServer := registry.NewRegistryPeerServer(serviceStore, peerStore, id, address)
 	apiv1.RegisterServiceRegistryServer(grpcServer, serviceServer)
 	apiv1.RegisterRegistryPeerServer(grpcServer, peerServer)
@@ -124,7 +110,7 @@ func startTestNodeWithPersistenceAndPeerTimeout(t *testing.T, id string, seedPee
 }
 
 func (n *testNode) Stop() {
-// Arresta l'esecuzione corrente.
+	// Arresta l'esecuzione corrente.
 	n.stopOnce.Do(func() {
 		close(n.serveStopCh)
 		if n.gossip != nil {
@@ -140,7 +126,7 @@ func (n *testNode) Stop() {
 }
 
 func TestMultiNodeGossipConvergenceAndPeerPruning(t *testing.T) {
-// Esegue il test per multi node gossip convergence and peer pruning.
+	// Esegue il test per multi node gossip convergence and peer pruning.
 	nodeA := startTestNode(t, "node-a", nil)
 	defer nodeA.Stop()
 
@@ -157,9 +143,7 @@ func TestMultiNodeGossipConvergenceAndPeerPruning(t *testing.T) {
 
 	err := registerService(nodeA.address, &apiv1.ServiceRecord{
 		ServiceName:  "users",
-		ServiceId:    "users-1",
 		Endpoint:     "users-1:8080",
-		Version:      "v1.0.0",
 		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
 	})
 	if err != nil {
@@ -167,10 +151,10 @@ func TestMultiNodeGossipConvergenceAndPeerPruning(t *testing.T) {
 	}
 
 	waitFor(t, 8*time.Second, "service converges to node-b", func() bool {
-		return hasService(nodeB.service.List(), "users", "users-1")
+		return hasService(nodeB.service.List(), "users")
 	})
 	waitFor(t, 8*time.Second, "service converges to node-c", func() bool {
-		return hasService(nodeC.service.List(), "users", "users-1")
+		return hasService(nodeC.service.List(), "users")
 	})
 
 	nodeC.Stop()
@@ -182,15 +166,14 @@ func TestMultiNodeGossipConvergenceAndPeerPruning(t *testing.T) {
 }
 
 func TestCrashResumeAndStateRealignment(t *testing.T) {
-// Esegue il test per crash resume and state realignment.
+	// Esegue il test per crash resume and state realignment.
 	nodeA := startTestNode(t, "node-a", nil)
 	defer nodeA.Stop()
 
 	nodeC := startTestNode(t, "node-c", []string{nodeA.address})
 	defer nodeC.Stop()
 
-	storageDir := filepath.Join(t.TempDir(), "node-b")
-	nodeB := startTestNodeWithPersistence(t, "node-b", []string{nodeA.address}, storageDir)
+	nodeB := startTestNodeWithPersistence(t, "node-b", []string{nodeA.address}, "")
 
 	waitFor(t, 8*time.Second, "node-a sees node-b and node-c", func() bool {
 		peers := nodeA.peers.List()
@@ -199,9 +182,7 @@ func TestCrashResumeAndStateRealignment(t *testing.T) {
 
 	err := registerService(nodeB.address, &apiv1.ServiceRecord{
 		ServiceName:  "billing",
-		ServiceId:    "bill-1",
 		Endpoint:     "billing-1:8080",
-		Version:      "v1.0.0",
 		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
 	})
 	if err != nil {
@@ -209,7 +190,7 @@ func TestCrashResumeAndStateRealignment(t *testing.T) {
 	}
 
 	waitFor(t, 8*time.Second, "billing service converges to node-a", func() bool {
-		return hasService(nodeA.service.List(), "billing", "bill-1")
+		return hasService(nodeA.service.List(), "billing")
 	})
 
 	nodeB.Stop()
@@ -220,33 +201,31 @@ func TestCrashResumeAndStateRealignment(t *testing.T) {
 
 	err = registerService(nodeA.address, &apiv1.ServiceRecord{
 		ServiceName:  "orders",
-		ServiceId:    "ord-1",
 		Endpoint:     "orders-1:8080",
-		Version:      "v1.0.0",
 		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
 	})
 	if err != nil {
 		t.Fatalf("register service on node-a failed: %v", err)
 	}
 
-	nodeBResumed := startTestNodeWithPersistence(t, "node-b", []string{nodeA.address}, storageDir)
+	nodeBResumed := startTestNodeWithPersistence(t, "node-b", []string{nodeA.address}, "")
 	defer nodeBResumed.Stop()
 
 	waitFor(t, 8*time.Second, "node-a sees resumed node-b", func() bool {
 		return hasPeer(nodeA.peers.List(), "node-b")
 	})
 
-	waitFor(t, 8*time.Second, "resumed node-b restored billing service", func() bool {
-		return hasService(nodeBResumed.service.List(), "billing", "bill-1")
+	waitFor(t, 8*time.Second, "resumed node-b recovered billing service from peers", func() bool {
+		return hasService(nodeBResumed.service.List(), "billing")
 	})
 
 	waitFor(t, 8*time.Second, "resumed node-b realigns orders service from cluster", func() bool {
-		return hasService(nodeBResumed.service.List(), "orders", "ord-1")
+		return hasService(nodeBResumed.service.List(), "orders")
 	})
 }
 
 func TestDeregisterConvergesAcrossNodes(t *testing.T) {
-// Esegue il test per deregister converges across nodes.
+	// Esegue il test per deregister converges across nodes.
 	nodeA := startTestNode(t, "node-a", nil)
 	defer nodeA.Stop()
 
@@ -255,9 +234,7 @@ func TestDeregisterConvergesAcrossNodes(t *testing.T) {
 
 	err := registerService(nodeA.address, &apiv1.ServiceRecord{
 		ServiceName:  "catalog",
-		ServiceId:    "cat-1",
 		Endpoint:     "catalog-1:8080",
-		Version:      "v1.0.0",
 		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
 	})
 	if err != nil {
@@ -265,21 +242,21 @@ func TestDeregisterConvergesAcrossNodes(t *testing.T) {
 	}
 
 	waitFor(t, 8*time.Second, "service converges to node-b", func() bool {
-		return hasService(nodeB.service.List(), "catalog", "cat-1")
+		return hasService(nodeB.service.List(), "catalog")
 	})
 
-	err = deregisterService(nodeA.address, "catalog", "cat-1")
+	err = deregisterService(nodeA.address, "catalog")
 	if err != nil {
 		t.Fatalf("deregister service on node-a failed: %v", err)
 	}
 
 	waitFor(t, 8*time.Second, "deregister converges to node-b", func() bool {
-		return !hasService(nodeB.service.List(), "catalog", "cat-1")
+		return !hasService(nodeB.service.List(), "catalog")
 	})
 }
 
 func TestGracefulLeaveConvergesWithoutPeerTimeout(t *testing.T) {
-// Esegue il test per graceful leave converges without peer timeout.
+	// Esegue il test per graceful leave converges without peer timeout.
 	nodeA := startTestNodeWithPersistenceAndPeerTimeout(t, "node-a", nil, "", 30)
 	defer nodeA.Stop()
 
@@ -299,7 +276,7 @@ func TestGracefulLeaveConvergesWithoutPeerTimeout(t *testing.T) {
 }
 
 func registerService(address string, record *apiv1.ServiceRecord) error {
-// Registra service.
+	// Registra service.
 	return withServiceClient(address, func(client apiv1.ServiceRegistryClient) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
@@ -315,15 +292,14 @@ func registerService(address string, record *apiv1.ServiceRecord) error {
 	})
 }
 
-func deregisterService(address, serviceName, serviceID string) error {
-// Deregistra service.
+func deregisterService(address, serviceName string) error {
+	// Deregistra service.
 	return withServiceClient(address, func(client apiv1.ServiceRegistryClient) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 
 		resp, err := client.DeregisterService(ctx, &apiv1.DeregisterServiceRequest{
 			ServiceName: serviceName,
-			ServiceId:   serviceID,
 		})
 		if err != nil {
 			return err
@@ -336,7 +312,7 @@ func deregisterService(address, serviceName, serviceID string) error {
 }
 
 func withServiceClient(address string, fn func(client apiv1.ServiceRegistryClient) error) error {
-// Esegue la logica di with service client.
+	// Esegue la logica di with service client.
 	dialCtx, dialCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	conn, err := grpc.DialContext(dialCtx, address, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	dialCancel()
@@ -349,7 +325,7 @@ func withServiceClient(address string, fn func(client apiv1.ServiceRegistryClien
 }
 
 func waitFor(t *testing.T, timeout time.Duration, message string, condition func() bool) {
-// Attende il completamento della condizione richiesta.
+	// Attende il completamento della condizione richiesta.
 	t.Helper()
 
 	deadline := time.Now().Add(timeout)
@@ -363,7 +339,7 @@ func waitFor(t *testing.T, timeout time.Duration, message string, condition func
 }
 
 func hasPeer(peers []*apiv1.NodeInfo, nodeID string) bool {
-// Controlla la presenza del valore richiesto.
+	// Controlla la presenza del valore richiesto.
 	for _, peer := range peers {
 		if peer.GetNodeId() == nodeID {
 			return true
@@ -372,10 +348,10 @@ func hasPeer(peers []*apiv1.NodeInfo, nodeID string) bool {
 	return false
 }
 
-func hasService(records []*apiv1.ServiceRecord, name, id string) bool {
-// Controlla la presenza del valore richiesto.
+func hasService(records []*apiv1.ServiceRecord, name string) bool {
+	// Controlla la presenza del valore richiesto.
 	for _, record := range records {
-		if record.GetServiceName() == name && record.GetServiceId() == id {
+		if record.GetServiceName() == name {
 			return true
 		}
 	}

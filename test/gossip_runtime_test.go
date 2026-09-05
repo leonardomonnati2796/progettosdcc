@@ -17,7 +17,7 @@ import (
 )
 
 func TestNewRuntimeCreatesWorkingRuntime(t *testing.T) {
-// Esegue il test per new runtime creates working runtime.
+	// Esegue il test per new runtime creates working runtime.
 	cfg := &config.RegistryConfig{
 		Node: config.RegistryNodeConfig{
 			ID:               "node-a",
@@ -40,20 +40,17 @@ func TestNewRuntimeCreatesWorkingRuntime(t *testing.T) {
 }
 
 func TestRuntimeBootstrapGossipAndReconcile(t *testing.T) {
-// Esegue il test per runtime bootstrap gossip and reconcile.
+	// Esegue il test per runtime bootstrap gossip and reconcile.
 	remoteAddress, remoteServiceStore, _, stopRemote := startPeerServer(t, "node-remote")
 	defer stopRemote()
 
 	nowUnix := time.Now().Unix()
 	remoteServiceStore.Upsert(&apiv1.ServiceRecord{
-		ServiceName:       "remote-users",
-		ServiceId:         "r1",
-		Endpoint:          "remote-users:8080",
-		Version:           "v1.0.0",
-		HealthStatus:      apiv1.HealthStatus_HEALTH_STATUS_SERVING,
-		LastHeartbeatUnix: nowUnix,
-		OwnerNodeId:       "node-remote",
-		LogicalVersion:    1,
+		ServiceName:    "remote-users",
+		Endpoint:       "remote-users:8080",
+		HealthStatus:   apiv1.HealthStatus_HEALTH_STATUS_SERVING,
+		OwnerNodeId:    "node-remote",
+		LogicalVersion: 1,
 	})
 
 	localServices := storage.NewServiceStore()
@@ -88,44 +85,38 @@ func TestRuntimeBootstrapGossipAndReconcile(t *testing.T) {
 	localPeers.Upsert(&apiv1.NodeInfo{NodeId: "node-remote", GrpcAddress: remoteAddress, UpdatedAtUnix: nowUnix})
 
 	localServices.Upsert(&apiv1.ServiceRecord{
-		ServiceName:       "local-orders",
-		ServiceId:         "l1",
-		Endpoint:          "local-orders:8080",
-		Version:           "v1.0.0",
-		HealthStatus:      apiv1.HealthStatus_HEALTH_STATUS_SERVING,
-		LastHeartbeatUnix: nowUnix,
-		OwnerNodeId:       "node-local",
-		LogicalVersion:    1,
+		ServiceName:    "local-orders",
+		Endpoint:       "local-orders:8080",
+		HealthStatus:   apiv1.HealthStatus_HEALTH_STATUS_SERVING,
+		OwnerNodeId:    "node-local",
+		LogicalVersion: 1,
 	})
 
 	if merged := remoteServiceStore.MergeRemote(localServices.ListForSync()); merged != 1 {
 		t.Fatalf("expected direct gossip merge to push one local service to remote node, got %d", merged)
 	}
-	if !containsService(remoteServiceStore.List(), "local-orders", "l1") {
+	if !containsService(remoteServiceStore.List(), "local-orders") {
 		t.Fatalf("expected gossip merge to push local service to remote node")
 	}
 
 	remoteServiceStore.Upsert(&apiv1.ServiceRecord{
-		ServiceName:       "remote-payments",
-		ServiceId:         "r2",
-		Endpoint:          "remote-payments:8080",
-		Version:           "v1.0.0",
-		HealthStatus:      apiv1.HealthStatus_HEALTH_STATUS_SERVING,
-		LastHeartbeatUnix: nowUnix + 2,
-		OwnerNodeId:       "node-remote",
-		LogicalVersion:    1,
+		ServiceName:    "remote-payments",
+		Endpoint:       "remote-payments:8080",
+		HealthStatus:   apiv1.HealthStatus_HEALTH_STATUS_SERVING,
+		OwnerNodeId:    "node-remote",
+		LogicalVersion: 1,
 	})
 
 	if merged := localServices.MergeRemote(remoteServiceStore.ListForSync()); merged != 2 {
 		t.Fatalf("expected direct reconcile merge to pull two remote services, got %d", merged)
 	}
-	if !containsService(localServices.List(), "remote-users", "r1") || !containsService(localServices.List(), "remote-payments", "r2") {
+	if !containsService(localServices.List(), "remote-users") || !containsService(localServices.List(), "remote-payments") {
 		t.Fatalf("expected reconcile merge to pull remote updates")
 	}
 }
 
 func TestRuntimeGracefulLeaveRemovesLocalPeer(t *testing.T) {
-// Esegue il test per runtime graceful leave removes local peer.
+	// Esegue il test per runtime graceful leave removes local peer.
 	remoteAddress, _, remotePeerStore, stopRemote := startPeerServer(t, "node-remote")
 	defer stopRemote()
 
@@ -161,7 +152,7 @@ func TestRuntimeGracefulLeaveRemovesLocalPeer(t *testing.T) {
 }
 
 func startPeerServer(t *testing.T, nodeID string) (address string, serviceStore *storage.ServiceStore, peerStore *storage.PeerStore, stop func()) {
-// Avvia l'esecuzione del componente.
+	// Avvia l'esecuzione del componente.
 	t.Helper()
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -191,7 +182,7 @@ func startPeerServer(t *testing.T, nodeID string) (address string, serviceStore 
 }
 
 func waitForCondition(t *testing.T, timeout time.Duration, condition func() bool) {
-// Attende il completamento della condizione richiesta.
+	// Attende il completamento della condizione richiesta.
 	t.Helper()
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
@@ -203,10 +194,10 @@ func waitForCondition(t *testing.T, timeout time.Duration, condition func() bool
 	t.Fatalf("timeout waiting for condition")
 }
 
-func containsService(records []*apiv1.ServiceRecord, name, id string) bool {
-// Controlla se il contenuto richiesto ? presente.
+func containsService(records []*apiv1.ServiceRecord, name string) bool {
+	// Controlla se il contenuto richiesto ? presente.
 	for _, record := range records {
-		if record.GetServiceName() == name && record.GetServiceId() == id {
+		if record.GetServiceName() == name {
 			return true
 		}
 	}
@@ -214,7 +205,7 @@ func containsService(records []*apiv1.ServiceRecord, name, id string) bool {
 }
 
 func containsPeer(peers []*apiv1.NodeInfo, nodeID string) bool {
-// Controlla se il contenuto richiesto ? presente.
+	// Controlla se il contenuto richiesto ? presente.
 	for _, peer := range peers {
 		if peer.GetNodeId() == nodeID {
 			return true

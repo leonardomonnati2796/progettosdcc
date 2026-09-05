@@ -10,7 +10,7 @@ Registro servizi distribuito in Go con replica gossip tra nodi registry, eseguib
 
 ## Comandi rapidi
 
-Il runner `scripts/dev.ps1` raccoglie i comandi più usati senza richiedere GNU Make:
+Il runner `scripts/dev.ps1` raccoglie i comandi più usati senza dipendere da strumenti di build aggiuntivi:
 
 ```powershell
 .\scripts\dev.ps1 help
@@ -19,7 +19,10 @@ Il runner `scripts/dev.ps1` raccoglie i comandi più usati senza richiedere GNU 
 .\scripts\dev.ps1 up
 .\scripts\dev.ps1 status
 .\scripts\dev.ps1 list
-.\scripts\dev.ps1 cli register -targets registry-node-1:50051 -name identity-api -id identity-1 -endpoint 203.0.113.10:8080 -version v1.0.0
+.\scripts\dev.ps1 crash
+.\scripts\dev.ps1 verify-resilience
+.\scripts\dev.ps1 recover
+.\scripts\dev.ps1 cli register -targets registry-node-1:50051 -name identity-api -endpoint 203.0.113.10:8080
 .\scripts\dev.ps1 down
 ```
 
@@ -37,7 +40,7 @@ Esecuzione completa dello scenario richiesto dalla traccia:
 .\scripts\dev.ps1 trace
 ```
 
-Lo scenario `trace` usa `identity-api` e gestisce automaticamente registrazione, gossip, fault injection, recovery e deregistrazione.
+Lo scenario `trace` usa un servizio casuale e gestisce automaticamente registrazione, gossip, fault injection su un nodo scelto casualmente, recovery e deregistrazione.
 
 I quattro profili disponibili sono `identity-api`, `billing-api`, `payments-api` e `catalog-api`.
 
@@ -52,11 +55,10 @@ Pulizia finale:
 1. Avvio dei 3 nodi registry
 2. Registrazione di un servizio di test
 3. Verifica convergenza su tutti i nodi
-4. Invio heartbeat
-5. Crash di un nodo registry
-6. Verifica resilienza dei nodi rimanenti
-7. Recovery del nodo crashato
-8. Deregistrazione del servizio e verifica stato finale
+4. Crash di un nodo registry
+5. Verifica resilienza dei nodi rimanenti
+6. Recovery del nodo crashato
+7. Deregistrazione del servizio e verifica stato finale
 
 ## Layout
 
@@ -85,23 +87,17 @@ Ricerca interattiva di un servizio:
 Oppure ricerca diretta senza prompt:
 
 ```powershell
-.\scripts\dev.ps1 discovery -name identity-api -id identity-1
+.\scripts\dev.ps1 discovery -name identity-api
 ```
 
 Registrazione manuale:
 
 ```powershell
-.\scripts\dev.ps1 cli register -targets registry-node-1:50051,registry-node-2:50051,registry-node-3:50051 -name identity-api -id identity-1 -endpoint 203.0.113.10:8080 -version v1.0.0
-```
-
-Heartbeat manuale:
-
-```powershell
-.\scripts\dev.ps1 cli heartbeat -targets registry-node-2:50051 -name identity-api -id identity-1
+.\scripts\dev.ps1 cli register -targets registry-node-1:50051,registry-node-2:50051,registry-node-3:50051 -name identity-api -endpoint 203.0.113.10:8080
 ```
 
 Deregistrazione manuale:
 
 ```powershell
-.\scripts\dev.ps1 cli deregister -targets registry-node-1:50051 -name identity-api -id identity-1
+.\scripts\dev.ps1 cli deregister -targets registry-node-1:50051 -name identity-api
 ```

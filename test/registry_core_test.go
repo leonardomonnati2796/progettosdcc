@@ -3,7 +3,6 @@ package test
 import (
 	"context"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -15,16 +14,14 @@ import (
 )
 
 func TestServiceRegistryServerRegisterAndHeartbeatAreVisible(t *testing.T) {
-// Esegue il test per service registry server register and heartbeat are visible.
+	// Esegue il test per service registry server register and heartbeat are visible.
 	store := storage.NewServiceStore()
-	srv := registry.NewServiceRegistryServer(store, "node-1", 5*time.Second)
+	srv := registry.NewServiceRegistryServer(store, "node-1")
 
 	registerResp, err := srv.RegisterService(context.Background(), &apiv1.RegisterServiceRequest{
 		Record: &apiv1.ServiceRecord{
 			ServiceName: "users",
-			ServiceId:   "users-1",
 			Endpoint:    "users-1:8080",
-			Version:     "v1.0.0",
 		},
 	})
 	if err != nil {
@@ -34,48 +31,31 @@ func TestServiceRegistryServerRegisterAndHeartbeatAreVisible(t *testing.T) {
 		t.Fatalf("expected register to be accepted")
 	}
 
-	heartbeatResp, err := srv.Heartbeat(context.Background(), &apiv1.HeartbeatRequest{
-		ServiceName:  "users",
-		ServiceId:    "users-1",
-		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_DEGRADED,
-	})
-	if err != nil {
-		t.Fatalf("heartbeat returned error: %v", err)
-	}
-	if !heartbeatResp.GetAccepted() {
-		t.Fatalf("expected heartbeat to be accepted")
-	}
-
-	getResp, err := srv.GetService(context.Background(), &apiv1.GetServiceRequest{ServiceName: "users", ServiceId: "users-1"})
+	getResp, err := srv.GetService(context.Background(), &apiv1.GetServiceRequest{ServiceName: "users"})
 	if err != nil {
 		t.Fatalf("get returned error: %v", err)
 	}
 	if len(getResp.GetRecords()) != 1 {
 		t.Fatalf("expected one matching record, got %d", len(getResp.GetRecords()))
 	}
-	if got := getResp.GetRecords()[0].GetHealthStatus(); got != apiv1.HealthStatus_HEALTH_STATUS_DEGRADED {
-		t.Fatalf("expected health status DEGRADED after heartbeat, got %v", got)
-	}
 }
 
 func TestServiceRegistryServerDeregisterRoundTrip(t *testing.T) {
-// Esegue il test per service registry server deregister round trip.
+	// Esegue il test per service registry server deregister round trip.
 	store := storage.NewServiceStore()
-	srv := registry.NewServiceRegistryServer(store, "node-1", 5*time.Second)
+	srv := registry.NewServiceRegistryServer(store, "node-1")
 
 	_, err := srv.RegisterService(context.Background(), &apiv1.RegisterServiceRequest{
 		Record: &apiv1.ServiceRecord{
 			ServiceName: "orders",
-			ServiceId:   "orders-1",
 			Endpoint:    "orders-1:8080",
-			Version:     "v1",
 		},
 	})
 	if err != nil {
 		t.Fatalf("register returned error: %v", err)
 	}
 
-	removeResp, err := srv.DeregisterService(context.Background(), &apiv1.DeregisterServiceRequest{ServiceName: "orders", ServiceId: "orders-1"})
+	removeResp, err := srv.DeregisterService(context.Background(), &apiv1.DeregisterServiceRequest{ServiceName: "orders"})
 	if err != nil {
 		t.Fatalf("deregister returned error: %v", err)
 	}
@@ -83,7 +63,7 @@ func TestServiceRegistryServerDeregisterRoundTrip(t *testing.T) {
 		t.Fatalf("expected deregister accepted=true")
 	}
 
-	getResp, err := srv.GetService(context.Background(), &apiv1.GetServiceRequest{ServiceName: "orders", ServiceId: "orders-1"})
+	getResp, err := srv.GetService(context.Background(), &apiv1.GetServiceRequest{ServiceName: "orders"})
 	if err != nil {
 		t.Fatalf("get returned error: %v", err)
 	}
@@ -93,8 +73,8 @@ func TestServiceRegistryServerDeregisterRoundTrip(t *testing.T) {
 }
 
 func TestServiceRegistryServerRegisterValidation(t *testing.T) {
-// Esegue il test per service registry server register validation.
-	srv := registry.NewServiceRegistryServer(storage.NewServiceStore(), "node-1", 5*time.Second)
+	// Esegue il test per service registry server register validation.
+	srv := registry.NewServiceRegistryServer(storage.NewServiceStore(), "node-1")
 
 	_, err := srv.RegisterService(context.Background(), &apiv1.RegisterServiceRequest{Record: &apiv1.ServiceRecord{}})
 	if err == nil {
@@ -111,16 +91,14 @@ func TestServiceRegistryServerRegisterValidation(t *testing.T) {
 }
 
 func TestServiceRegistryServerRegisterIdempotentWithRequestID(t *testing.T) {
-// Esegue il test per service registry server register idempotent with request id.
+	// Esegue il test per service registry server register idempotent with request id.
 	store := storage.NewServiceStore()
-	srv := registry.NewServiceRegistryServer(store, "node-1", 5*time.Second)
+	srv := registry.NewServiceRegistryServer(store, "node-1")
 
 	req := &apiv1.RegisterServiceRequest{
 		Record: &apiv1.ServiceRecord{
 			ServiceName: "users",
-			ServiceId:   "users-1",
 			Endpoint:    "users-1:8080",
-			Version:     "v1.0.0",
 		},
 	}
 	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-request-id", "req-users-1"))
@@ -132,7 +110,7 @@ func TestServiceRegistryServerRegisterIdempotentWithRequestID(t *testing.T) {
 		t.Fatalf("second register returned error: %v", err)
 	}
 
-	getResp, err := srv.GetService(context.Background(), &apiv1.GetServiceRequest{ServiceName: "users", ServiceId: "users-1"})
+	getResp, err := srv.GetService(context.Background(), &apiv1.GetServiceRequest{ServiceName: "users"})
 	if err != nil {
 		t.Fatalf("get returned error: %v", err)
 	}

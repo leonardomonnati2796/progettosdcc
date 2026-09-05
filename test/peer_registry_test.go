@@ -10,7 +10,7 @@ import (
 )
 
 func TestRegistryPeerServerJoinAndGossipMerge(t *testing.T) {
-// Esegue il test per registry peer server join and gossip merge.
+	// Esegue il test per registry peer server join and gossip merge.
 	serviceStore := storage.NewServiceStore()
 	peerStore := storage.NewPeerStore()
 	server := registry.NewRegistryPeerServer(serviceStore, peerStore, "node-a", "node-a:50051")
@@ -29,14 +29,11 @@ func TestRegistryPeerServerJoinAndGossipMerge(t *testing.T) {
 		SourceNodeId: "node-b",
 		Records: []*apiv1.ServiceRecord{
 			{
-				ServiceName:       "users",
-				ServiceId:         "u1",
-				Endpoint:          "users-1:8080",
-				Version:           "v1",
-				HealthStatus:      apiv1.HealthStatus_HEALTH_STATUS_SERVING,
-				LastHeartbeatUnix: 101,
-				OwnerNodeId:       "node-b",
-				LogicalVersion:    1,
+				ServiceName:    "users",
+				Endpoint:       "users-1:8080",
+				HealthStatus:   apiv1.HealthStatus_HEALTH_STATUS_SERVING,
+				OwnerNodeId:    "node-b",
+				LogicalVersion: 1,
 			},
 		},
 		Peers: []*apiv1.NodeInfo{
@@ -67,7 +64,7 @@ func TestRegistryPeerServerJoinAndGossipMerge(t *testing.T) {
 }
 
 func TestRegistryPeerServerLeaveCluster(t *testing.T) {
-// Esegue il test per registry peer server leave cluster.
+	// Esegue il test per registry peer server leave cluster.
 	serviceStore := storage.NewServiceStore()
 	peerStore := storage.NewPeerStore()
 	server := registry.NewRegistryPeerServer(serviceStore, peerStore, "node-a", "node-a:50051")

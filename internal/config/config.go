@@ -12,14 +12,12 @@ import (
 type RegistryConfig struct {
 	Node    RegistryNodeConfig    `yaml:"node"`
 	Cluster RegistryClusterConfig `yaml:"cluster"`
-	Service RegistryServiceConfig `yaml:"service"`
 }
 
 type RegistryNodeConfig struct {
 	ID               string `yaml:"id"`
 	ListenAddress    string `yaml:"listen_address"`
 	AdvertiseAddress string `yaml:"advertise_address"`
-	StorageDir       string `yaml:"storage_dir"`
 }
 
 type RegistryClusterConfig struct {
@@ -32,10 +30,6 @@ type RegistryClusterConfig struct {
 	MaxGossipFanout          int      `yaml:"max_gossip_fanout"`
 }
 
-type RegistryServiceConfig struct {
-	HeartbeatTTLSeconds int `yaml:"heartbeat_ttl_seconds"`
-}
-
 type DemoServiceConfig struct {
 	Service  DemoServiceIdentityConfig `yaml:"service"`
 	Registry DemoServiceRegistryConfig `yaml:"registry"`
@@ -44,7 +38,6 @@ type DemoServiceConfig struct {
 type DemoServiceIdentityConfig struct {
 	ID         string `yaml:"id"`
 	Name       string `yaml:"name"`
-	Version    string `yaml:"version"`
 	Endpoint   string `yaml:"endpoint"`
 	HealthInit string `yaml:"health_init"`
 }
@@ -104,9 +97,6 @@ func (c *RegistryConfig) Validate() error {
 	if c.Cluster.MaxGossipFanout <= 0 {
 		return errors.New("cluster.max_gossip_fanout must be > 0")
 	}
-	if c.Service.HeartbeatTTLSeconds <= 0 {
-		return errors.New("service.heartbeat_ttl_seconds must be > 0")
-	}
 	return nil
 }
 
@@ -120,9 +110,6 @@ func (c *DemoServiceConfig) Validate() error {
 	}
 	if strings.TrimSpace(c.Service.Name) == "" {
 		return errors.New("service.name is required")
-	}
-	if strings.TrimSpace(c.Service.Version) == "" {
-		return errors.New("service.version is required")
 	}
 	if strings.TrimSpace(c.Service.Endpoint) == "" {
 		return errors.New("service.endpoint is required")

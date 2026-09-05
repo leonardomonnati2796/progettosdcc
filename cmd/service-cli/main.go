@@ -16,13 +16,10 @@ import (
 )
 
 type outputServiceRecord struct {
-	ServiceName       string `json:"service_name,omitempty"`
-	ServiceId         string `json:"service_id,omitempty"`
-	Endpoint          string `json:"endpoint,omitempty"`
-	Version           string `json:"version,omitempty"`
-	LastHeartbeatUnix int64  `json:"last_heartbeat_unix,omitempty"`
-	OwnerNodeId       string `json:"owner_node_id,omitempty"`
-	LogicalVersion    uint64 `json:"logical_version,omitempty"`
+	ServiceName    string `json:"service_name,omitempty"`
+	Endpoint       string `json:"endpoint,omitempty"`
+	OwnerNodeId    string `json:"owner_node_id,omitempty"`
+	LogicalVersion uint64 `json:"logical_version,omitempty"`
 }
 
 func main() {
@@ -36,8 +33,6 @@ func main() {
 	switch command {
 	case "register":
 		runRegister(os.Args[2:])
-	case "heartbeat":
-		runHeartbeat(os.Args[2:])
 	case "deregister":
 		runDeregister(os.Args[2:])
 	case "list":
@@ -54,7 +49,7 @@ func main() {
 func printUsage() {
 	// Stampa il contenuto richiesto.
 	fmt.Fprintf(os.Stderr, "service-cli <command> [flags]\n")
-	fmt.Fprintf(os.Stderr, "commands: register, heartbeat, deregister, list, get\n")
+	fmt.Fprintf(os.Stderr, "commands: register, deregister, list, get\n")
 	fmt.Fprintf(os.Stderr, "common flag: -targets localhost:50051,localhost:50052\n")
 }
 
@@ -76,17 +71,13 @@ func runRegister(args []string) {
 	fs := flag.NewFlagSet("register", flag.ExitOnError)
 	targets := fs.String("targets", "localhost:50051", "comma-separated registry endpoints")
 	serviceName := fs.String("name", "", "service name")
-	serviceID := fs.String("id", "", "service id")
 	endpoint := fs.String("endpoint", "", "service endpoint")
-	version := fs.String("version", "", "service version")
 	health := fs.String("health", "HEALTH_STATUS_SERVING", "health status")
 	traceRegister := fs.Bool("trace-register", false, "print register workflow trace")
 	fs.Parse(args)
 
 	requireFlag(*serviceName, "name")
-	requireFlag(*serviceID, "id")
 	requireFlag(*endpoint, "endpoint")
-	requireFlag(*version, "version")
 
 	rc := newClient(*targets)
 	if *traceRegister {
@@ -94,9 +85,7 @@ func runRegister(args []string) {
 	}
 	resp, err := rc.RegisterWithResponse(&apiv1.ServiceRecord{
 		ServiceName:  *serviceName,
-		ServiceId:    *serviceID,
 		Endpoint:     *endpoint,
-		Version:      *version,
 		HealthStatus: parseHealthStatus(*health),
 	})
 	if err != nil {
@@ -109,40 +98,19 @@ func runRegister(args []string) {
 	fmt.Println("servizio registrato")
 }
 
-func runHeartbeat(args []string) {
-	// Esegue il comando richiesto.
-	fs := flag.NewFlagSet("heartbeat", flag.ExitOnError)
-	targets := fs.String("targets", "localhost:50051", "comma-separated registry endpoints")
-	serviceName := fs.String("name", "", "service name")
-	serviceID := fs.String("id", "", "service id")
-	health := fs.String("health", "HEALTH_STATUS_SERVING", "health status")
-	fs.Parse(args)
-
-	requireFlag(*serviceName, "name")
-	requireFlag(*serviceID, "id")
-
-	rc := newClient(*targets)
-	if err := rc.Heartbeat(*serviceName, *serviceID, parseHealthStatus(*health)); err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println("heartbeat ok")
-}
-
 func runDeregister(args []string) {
 	// Esegue il comando richiesto.
 	fs := flag.NewFlagSet("deregister", flag.ExitOnError)
 	targets := fs.String("targets", "localhost:50051", "comma-separated registry endpoints")
 	serviceName := fs.String("name", "", "service name")
-	serviceID := fs.String("id", "", "service id")
 	fs.Parse(args)
 
 	requireFlag(*serviceName, "name")
-	requireFlag(*serviceID, "id")
 
 	rc := newClient(*targets)
-	if err := rc.Deregister(*serviceName, *serviceID); err != nil {
+	if err := rc.Deregister(*serviceName); err != nil {
 		if isDeregisterNotFoundError(err) {
-			fmt.Printf("servizio non presente: %s/%s; niente da deregistrare\n", *serviceName, *serviceID)
+			fmt.Printf("servizio non presente: %s; niente da deregistrare\n", *serviceName)
 			return
 		}
 		log.Fatal(err)
@@ -177,13 +145,12 @@ func runGet(args []string) {
 	fs := flag.NewFlagSet("get", flag.ExitOnError)
 	targets := fs.String("targets", "localhost:50051", "comma-separated registry endpoints")
 	serviceName := fs.String("name", "", "service name")
-	serviceID := fs.String("id", "", "service id")
 	fs.Parse(args)
 
 	requireFlag(*serviceName, "name")
 
 	rc := newClient(*targets)
-	records, err := rc.Get(*serviceName, *serviceID)
+	records, err := rc.Get(*serviceName)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -198,13 +165,10 @@ func toOutputServiceRecords(records []*apiv1.ServiceRecord) []outputServiceRecor
 			continue
 		}
 		out = append(out, outputServiceRecord{
-			ServiceName:       record.GetServiceName(),
-			ServiceId:         record.GetServiceId(),
-			Endpoint:          record.GetEndpoint(),
-			Version:           record.GetVersion(),
-			LastHeartbeatUnix: record.GetLastHeartbeatUnix(),
-			OwnerNodeId:       record.GetOwnerNodeId(),
-			LogicalVersion:    record.GetLogicalVersion(),
+			ServiceName:    record.GetServiceName(),
+			Endpoint:       record.GetEndpoint(),
+			OwnerNodeId:    record.GetOwnerNodeId(),
+			LogicalVersion: record.GetLogicalVersion(),
 		})
 	}
 	return out

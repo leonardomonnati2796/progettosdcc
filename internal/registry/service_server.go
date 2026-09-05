@@ -18,10 +18,9 @@ import (
 type ServiceRegistryServer struct {
 	apiv1.UnimplementedServiceRegistryServer
 
-	store        *storage.ServiceStore
-	nodeID       string
-	heartbeatTTL time.Duration
-	now          func() time.Time
+	store  *storage.ServiceStore
+	nodeID string
+	now    func() time.Time
 
 	registerCacheMu      sync.Mutex
 	registerCache        map[string]*apiv1.RegisterServiceResponse
@@ -33,15 +32,11 @@ type ServiceRegistryServer struct {
 	deregisterCacheCap   int
 }
 
-func NewServiceRegistryServer(store *storage.ServiceStore, nodeID string, heartbeatTTL time.Duration) *ServiceRegistryServer {
+func NewServiceRegistryServer(store *storage.ServiceStore, nodeID string) *ServiceRegistryServer {
 	// Crea un nuovo service registry server.
-	if heartbeatTTL <= 0 {
-		heartbeatTTL = 10 * time.Second
-	}
 	return &ServiceRegistryServer{
 		store:              store,
 		nodeID:             strings.TrimSpace(nodeID),
-		heartbeatTTL:       heartbeatTTL,
 		now:                time.Now,
 		registerCache:      make(map[string]*apiv1.RegisterServiceResponse),
 		registerCacheCap:   4096,
@@ -60,14 +55,8 @@ func (s *ServiceRegistryServer) RegisterService(ctx context.Context, req *apiv1.
 	if strings.TrimSpace(in.GetServiceName()) == "" {
 		return nil, status.Error(codes.InvalidArgument, "record.service_name is required")
 	}
-	if strings.TrimSpace(in.GetServiceId()) == "" {
-		return nil, status.Error(codes.InvalidArgument, "record.service_id is required")
-	}
 	if strings.TrimSpace(in.GetEndpoint()) == "" {
 		return nil, status.Error(codes.InvalidArgument, "record.endpoint is required")
-	}
-	if strings.TrimSpace(in.GetVersion()) == "" {
-		return nil, status.Error(codes.InvalidArgument, "record.version is required")
 	}
 
 	return s.registerServiceRecord(ctx, in)
@@ -82,30 +71,23 @@ func (s *ServiceRegistryServer) registerServiceRecord(ctx context.Context, in *a
 		}
 	}
 
-	nowUnix := s.now().Unix()
 	healthStatus := in.GetHealthStatus()
 	if healthStatus == apiv1.HealthStatus_HEALTH_STATUS_UNSPECIFIED {
 		healthStatus = apiv1.HealthStatus_HEALTH_STATUS_SERVING
 	}
 
 	record := &apiv1.ServiceRecord{
-		ServiceName:       strings.TrimSpace(in.GetServiceName()),
-		ServiceId:         strings.TrimSpace(in.GetServiceId()),
-		Endpoint:          strings.TrimSpace(in.GetEndpoint()),
-		Version:           strings.TrimSpace(in.GetVersion()),
-		HealthStatus:      healthStatus,
-		LastHeartbeatUnix: in.GetLastHeartbeatUnix(),
-		OwnerNodeId:       strings.TrimSpace(s.nodeID),
-		LogicalVersion:    in.GetLogicalVersion(),
-	}
-	if record.LastHeartbeatUnix == 0 {
-		record.LastHeartbeatUnix = nowUnix
+		ServiceName:    strings.TrimSpace(in.GetServiceName()),
+		Endpoint:       strings.TrimSpace(in.GetEndpoint()),
+		HealthStatus:   healthStatus,
+		OwnerNodeId:    strings.TrimSpace(s.nodeID),
+		LogicalVersion: in.GetLogicalVersion(),
 	}
 
-	if existing, ok := s.getActiveRecord(record.GetServiceName(), record.GetServiceId()); ok && isEquivalentRegisterRecord(existing, record) {
+	if existing, ok := s.getActiveRecord(record.GetServiceName()); ok && isEquivalentRegisterRecord(existing, record) {
 		response := &apiv1.RegisterServiceResponse{
 			Accepted: true,
-			Message:  fmt.Sprintf("already registered %s/%s %s at %s (version=%d)", existing.GetServiceName(), existing.GetServiceId(), existing.GetVersion(), existing.GetEndpoint(), existing.GetLogicalVersion()),
+			Message:  fmt.Sprintf("already registered %s at %s (logical_version=%d)", existing.GetServiceName(), existing.GetEndpoint(), existing.GetLogicalVersion()),
 		}
 		s.cacheRegisterResponse(requestID, response)
 		return response, nil
@@ -115,15 +97,15 @@ func (s *ServiceRegistryServer) registerServiceRecord(ctx context.Context, in *a
 
 	response := &apiv1.RegisterServiceResponse{
 		Accepted: true,
-		Message:  fmt.Sprintf("registered %s/%s %s at %s (version=%d)", stored.GetServiceName(), stored.GetServiceId(), stored.GetVersion(), stored.GetEndpoint(), stored.GetLogicalVersion()),
+		Message:  fmt.Sprintf("registered %s at %s (logical_version=%d)", stored.GetServiceName(), stored.GetEndpoint(), stored.GetLogicalVersion()),
 	}
 	s.cacheRegisterResponse(requestID, response)
 	return response, nil
 }
 
-func (s *ServiceRegistryServer) getActiveRecord(serviceName string, serviceID string) (*apiv1.ServiceRecord, bool) {
+func (s *ServiceRegistryServer) getActiveRecord(serviceName string) (*apiv1.ServiceRecord, bool) {
 	// Recupera active record.
-	records := s.store.Get(serviceName, serviceID)
+	records := s.store.Get(serviceName)
 	if len(records) == 0 || records[0] == nil {
 		return nil, false
 	}
@@ -136,9 +118,7 @@ func isEquivalentRegisterRecord(existing *apiv1.ServiceRecord, incoming *apiv1.S
 		return false
 	}
 	return existing.GetServiceName() == incoming.GetServiceName() &&
-		existing.GetServiceId() == incoming.GetServiceId() &&
 		existing.GetEndpoint() == incoming.GetEndpoint() &&
-		existing.GetVersion() == incoming.GetVersion() &&
 		existing.GetHealthStatus() == incoming.GetHealthStatus()
 }
 
@@ -202,12 +182,8 @@ func (s *ServiceRegistryServer) DeregisterService(ctx context.Context, req *apiv
 	}
 
 	serviceName := strings.TrimSpace(req.GetServiceName())
-	serviceID := strings.TrimSpace(req.GetServiceId())
 	if serviceName == "" {
 		return nil, status.Error(codes.InvalidArgument, "service_name is required")
-	}
-	if serviceID == "" {
-		return nil, status.Error(codes.InvalidArgument, "service_id is required")
 	}
 
 	requestID := extractRequestIDFromContext(ctx)
@@ -220,7 +196,7 @@ func (s *ServiceRegistryServer) DeregisterService(ctx context.Context, req *apiv
 		}
 	}
 
-	removed := s.store.Remove(serviceName, serviceID, s.now().Unix())
+	removed := s.store.Remove(serviceName, s.now().Unix())
 	if !removed {
 		resp := &apiv1.DeregisterServiceResponse{Accepted: false, Message: "service not found"}
 		s.store.RecordDeregisterResult(requestID, resp)
@@ -270,39 +246,6 @@ func (s *ServiceRegistryServer) cacheDeregisterResponse(requestID string, respon
 	}
 }
 
-func (s *ServiceRegistryServer) Heartbeat(_ context.Context, req *apiv1.HeartbeatRequest) (*apiv1.HeartbeatResponse, error) {
-	// Gestisce il heartbeat del servizio.
-	if req == nil {
-		return nil, status.Error(codes.InvalidArgument, "request is required")
-	}
-
-	serviceName := strings.TrimSpace(req.GetServiceName())
-	serviceID := strings.TrimSpace(req.GetServiceId())
-	if serviceName == "" {
-		return nil, status.Error(codes.InvalidArgument, "service_name is required")
-	}
-	if serviceID == "" {
-		return nil, status.Error(codes.InvalidArgument, "service_id is required")
-	}
-
-	heartbeatUnix := req.GetHeartbeatUnix()
-	if heartbeatUnix == 0 {
-		heartbeatUnix = s.now().Unix()
-	}
-
-	healthStatus := req.GetHealthStatus()
-	if healthStatus == apiv1.HealthStatus_HEALTH_STATUS_UNSPECIFIED {
-		healthStatus = apiv1.HealthStatus_HEALTH_STATUS_SERVING
-	}
-
-	_, updated := s.store.UpdateHeartbeat(serviceName, serviceID, healthStatus, heartbeatUnix)
-	if !updated {
-		return &apiv1.HeartbeatResponse{Accepted: false, Message: "service not registered"}, nil
-	}
-
-	return &apiv1.HeartbeatResponse{Accepted: true, Message: "heartbeat accepted"}, nil
-}
-
 func (s *ServiceRegistryServer) GetService(_ context.Context, req *apiv1.GetServiceRequest) (*apiv1.GetServiceResponse, error) {
 	// Recupera service.
 	if req == nil {
@@ -314,14 +257,12 @@ func (s *ServiceRegistryServer) GetService(_ context.Context, req *apiv1.GetServ
 		return nil, status.Error(codes.InvalidArgument, "service_name is required")
 	}
 
-	s.store.MarkStale(s.now().Unix(), int64(s.heartbeatTTL.Seconds()))
-	records := s.store.Get(serviceName, req.GetServiceId())
+	records := s.store.Get(serviceName)
 	return &apiv1.GetServiceResponse{Records: records}, nil
 }
 
 func (s *ServiceRegistryServer) ListServices(_ context.Context, _ *apiv1.ListServicesRequest) (*apiv1.ListServicesResponse, error) {
 	// Elenca services.
-	s.store.MarkStale(s.now().Unix(), int64(s.heartbeatTTL.Seconds()))
 	records := s.store.List()
 	return &apiv1.ListServicesResponse{Records: records}, nil
 }

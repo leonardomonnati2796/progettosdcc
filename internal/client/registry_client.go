@@ -201,17 +201,7 @@ func (c *RegistryClient) isEndpointResponsive(address string, timeout time.Durat
 	}
 	defer conn.Close()
 
-	callCtx, callCancel := context.WithTimeout(context.Background(), timeout)
-	defer callCancel()
-
-	stub := apiv1.NewServiceRegistryClient(conn)
-	_, err = stub.Heartbeat(callCtx, &apiv1.HeartbeatRequest{
-		ServiceName:   "__probe__",
-		ServiceId:     "__probe__",
-		HealthStatus:  apiv1.HealthStatus_HEALTH_STATUS_SERVING,
-		HeartbeatUnix: time.Now().Unix(),
-	})
-	return err == nil
+	return true
 }
 
 func (c *RegistryClient) registerOnEndpoint(address string, requestID string, record *apiv1.ServiceRecord, timeout time.Duration) (*apiv1.RegisterServiceResponse, error) {
@@ -285,30 +275,8 @@ func isEmptyRegisterRejection(err error) bool {
 	return reason == ""
 }
 
-// Heartbeat sends a Heartbeat RPC for the given service instance.
-func (c *RegistryClient) Heartbeat(serviceName, serviceID string, status apiv1.HealthStatus) error {
-	// Gestisce il heartbeat del servizio.
-	return c.withClient(func(stub apiv1.ServiceRegistryClient) error {
-		ctx, cancel := context.WithTimeout(context.Background(), c.rpcTimeout)
-		defer cancel()
-		resp, err := stub.Heartbeat(ctx, &apiv1.HeartbeatRequest{
-			ServiceName:   serviceName,
-			ServiceId:     serviceID,
-			HealthStatus:  status,
-			HeartbeatUnix: time.Now().Unix(),
-		})
-		if err != nil {
-			return fmt.Errorf("Heartbeat RPC: %w", err)
-		}
-		if !resp.GetAccepted() {
-			return fmt.Errorf("Heartbeat rejected: %s", resp.GetMessage())
-		}
-		return nil
-	})
-}
-
 // Deregister sends a DeregisterService RPC for the given service instance.
-func (c *RegistryClient) Deregister(serviceName, serviceID string) error {
+func (c *RegistryClient) Deregister(serviceName string) error {
 	// Deregistra esegue la logica della funzione..
 	if len(c.endpoints) == 0 {
 		return fmt.Errorf("no registry endpoints configured")
@@ -320,7 +288,7 @@ func (c *RegistryClient) Deregister(serviceName, serviceID string) error {
 		var lastErr error
 		for _, idx := range order {
 			addr := c.endpoints[idx]
-			err := c.deregisterOnEndpoint(addr, requestID, serviceName, serviceID, c.rpcTimeout)
+			err := c.deregisterOnEndpoint(addr, requestID, serviceName, c.rpcTimeout)
 			if err == nil {
 				return nil
 			}
@@ -340,7 +308,7 @@ func (c *RegistryClient) Deregister(serviceName, serviceID string) error {
 	}
 }
 
-func (c *RegistryClient) deregisterOnEndpoint(address string, requestID string, serviceName, serviceID string, timeout time.Duration) error {
+func (c *RegistryClient) deregisterOnEndpoint(address string, requestID string, serviceName string, timeout time.Duration) error {
 	// Deregistra on endpoint.
 	dialCtx, dialCancel := context.WithTimeout(context.Background(), timeout)
 	conn, err := grpc.DialContext( //nolint:staticcheck // consistent with existing codebase
@@ -362,7 +330,6 @@ func (c *RegistryClient) deregisterOnEndpoint(address string, requestID string, 
 	stub := apiv1.NewServiceRegistryClient(conn)
 	resp, err := stub.DeregisterService(callCtx, &apiv1.DeregisterServiceRequest{
 		ServiceName: serviceName,
-		ServiceId:   serviceID,
 	})
 	if err != nil {
 		return fmt.Errorf("DeregisterService RPC: %w", err)
@@ -374,7 +341,7 @@ func (c *RegistryClient) deregisterOnEndpoint(address string, requestID string, 
 }
 
 // Get returns the registry records for the given service name and optional id.
-func (c *RegistryClient) Get(serviceName, serviceID string) ([]*apiv1.ServiceRecord, error) {
+func (c *RegistryClient) Get(serviceName string) ([]*apiv1.ServiceRecord, error) {
 	// Recupera esegue la logica della funzione..
 	var records []*apiv1.ServiceRecord
 	err := c.withClient(func(stub apiv1.ServiceRegistryClient) error {
@@ -382,7 +349,6 @@ func (c *RegistryClient) Get(serviceName, serviceID string) ([]*apiv1.ServiceRec
 		defer cancel()
 		resp, err := stub.GetService(ctx, &apiv1.GetServiceRequest{
 			ServiceName: serviceName,
-			ServiceId:   serviceID,
 		})
 		if err != nil {
 			return fmt.Errorf("GetService RPC: %w", err)

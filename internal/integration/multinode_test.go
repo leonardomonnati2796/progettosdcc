@@ -48,6 +48,7 @@ func startTestNodeWithPersistence(t *testing.T, id string, seedPeers []string, s
 func startTestNodeWithPersistenceAndPeerTimeout(t *testing.T, id string, seedPeers []string, storageDir string, peerTimeoutSeconds int) *testNode {
 	// Avvia l'esecuzione del componente.
 	t.Helper()
+	_ = storageDir
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -68,28 +69,14 @@ func startTestNodeWithPersistenceAndPeerTimeout(t *testing.T, id string, seedPee
 			PeerTimeoutSeconds:       peerTimeoutSeconds,
 			MaxGossipFanout:          2,
 		},
-		Service: config.RegistryServiceConfig{HeartbeatTTLSeconds: 6},
 	}
 
 	serviceStore := storage.NewServiceStore()
 	peerStore := storage.NewPeerStore()
-	if storageDir != "" {
-		snapshot, err := storage.LoadSnapshot(storageDir)
-		if err != nil {
-			t.Fatalf("snapshot load failed: %v", err)
-		}
-		serviceStore.ReplaceAll(snapshot.Services)
-		peerStore.ReplaceAll(snapshot.Peers)
-		saveSnapshot := func() {
-			_ = storage.SaveSnapshot(storageDir, serviceStore.List(), peerStore.List())
-		}
-		serviceStore.SetOnChange(saveSnapshot)
-		peerStore.SetOnChange(saveSnapshot)
-	}
 	peerStore.UpsertSelf(id, address, time.Now().Unix())
 
 	grpcServer := grpc.NewServer()
-	serviceServer := registry.NewServiceRegistryServer(serviceStore, id, 6*time.Second)
+	serviceServer := registry.NewServiceRegistryServer(serviceStore, id)
 	peerServer := registry.NewRegistryPeerServer(serviceStore, peerStore, id, address)
 	apiv1.RegisterServiceRegistryServer(grpcServer, serviceServer)
 	apiv1.RegisterRegistryPeerServer(grpcServer, peerServer)
@@ -157,9 +144,7 @@ func TestMultiNodeGossipConvergenceAndPeerPruning(t *testing.T) {
 
 	err := registerService(nodeA.address, &apiv1.ServiceRecord{
 		ServiceName:  "users",
-		ServiceId:    "users-1",
 		Endpoint:     "users-1:8080",
-		Version:      "v1.0.0",
 		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
 	})
 	if err != nil {
@@ -167,10 +152,10 @@ func TestMultiNodeGossipConvergenceAndPeerPruning(t *testing.T) {
 	}
 
 	waitFor(t, 8*time.Second, "service converges to node-b", func() bool {
-		return hasService(nodeB.service.List(), "users", "users-1")
+		return hasService(nodeB.service.List(), "users")
 	})
 	waitFor(t, 8*time.Second, "service converges to node-c", func() bool {
-		return hasService(nodeC.service.List(), "users", "users-1")
+		return hasService(nodeC.service.List(), "users")
 	})
 
 	nodeC.Stop()
@@ -199,9 +184,7 @@ func TestCrashResumeAndStateRealignment(t *testing.T) {
 
 	err := registerService(nodeB.address, &apiv1.ServiceRecord{
 		ServiceName:  "billing",
-		ServiceId:    "bill-1",
 		Endpoint:     "billing-1:8080",
-		Version:      "v1.0.0",
 		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
 	})
 	if err != nil {
@@ -209,7 +192,7 @@ func TestCrashResumeAndStateRealignment(t *testing.T) {
 	}
 
 	waitFor(t, 8*time.Second, "billing service converges to node-a", func() bool {
-		return hasService(nodeA.service.List(), "billing", "bill-1")
+		return hasService(nodeA.service.List(), "billing")
 	})
 
 	nodeB.Stop()
@@ -220,9 +203,7 @@ func TestCrashResumeAndStateRealignment(t *testing.T) {
 
 	err = registerService(nodeA.address, &apiv1.ServiceRecord{
 		ServiceName:  "orders",
-		ServiceId:    "ord-1",
 		Endpoint:     "orders-1:8080",
-		Version:      "v1.0.0",
 		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
 	})
 	if err != nil {
@@ -237,11 +218,11 @@ func TestCrashResumeAndStateRealignment(t *testing.T) {
 	})
 
 	waitFor(t, 8*time.Second, "resumed node-b restored billing service", func() bool {
-		return hasService(nodeBResumed.service.List(), "billing", "bill-1")
+		return hasService(nodeBResumed.service.List(), "billing")
 	})
 
 	waitFor(t, 8*time.Second, "resumed node-b realigns orders service from cluster", func() bool {
-		return hasService(nodeBResumed.service.List(), "orders", "ord-1")
+		return hasService(nodeBResumed.service.List(), "orders")
 	})
 }
 
@@ -255,9 +236,7 @@ func TestDeregisterConvergesAcrossNodes(t *testing.T) {
 
 	err := registerService(nodeA.address, &apiv1.ServiceRecord{
 		ServiceName:  "catalog",
-		ServiceId:    "cat-1",
 		Endpoint:     "catalog-1:8080",
-		Version:      "v1.0.0",
 		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
 	})
 	if err != nil {
@@ -265,16 +244,16 @@ func TestDeregisterConvergesAcrossNodes(t *testing.T) {
 	}
 
 	waitFor(t, 8*time.Second, "service converges to node-b", func() bool {
-		return hasService(nodeB.service.List(), "catalog", "cat-1")
+		return hasService(nodeB.service.List(), "catalog")
 	})
 
-	err = deregisterService(nodeA.address, "catalog", "cat-1")
+	err = deregisterService(nodeA.address, "catalog")
 	if err != nil {
 		t.Fatalf("deregister service on node-a failed: %v", err)
 	}
 
 	waitFor(t, 8*time.Second, "deregister converges to node-b", func() bool {
-		return !hasService(nodeB.service.List(), "catalog", "cat-1")
+		return !hasService(nodeB.service.List(), "catalog")
 	})
 }
 
@@ -315,7 +294,7 @@ func registerService(address string, record *apiv1.ServiceRecord) error {
 	})
 }
 
-func deregisterService(address, serviceName, serviceID string) error {
+func deregisterService(address, serviceName string) error {
 	// Deregistra service.
 	return withServiceClient(address, func(client apiv1.ServiceRegistryClient) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -323,7 +302,6 @@ func deregisterService(address, serviceName, serviceID string) error {
 
 		resp, err := client.DeregisterService(ctx, &apiv1.DeregisterServiceRequest{
 			ServiceName: serviceName,
-			ServiceId:   serviceID,
 		})
 		if err != nil {
 			return err
@@ -372,10 +350,10 @@ func hasPeer(peers []*apiv1.NodeInfo, nodeID string) bool {
 	return false
 }
 
-func hasService(records []*apiv1.ServiceRecord, serviceName, serviceID string) bool {
+func hasService(records []*apiv1.ServiceRecord, serviceName string) bool {
 	// Controlla la presenza del valore richiesto.
 	for _, record := range records {
-		if record.GetServiceName() == serviceName && record.GetServiceId() == serviceID {
+		if record.GetServiceName() == serviceName {
 			return true
 		}
 	}

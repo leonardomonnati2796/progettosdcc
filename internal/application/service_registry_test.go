@@ -18,8 +18,8 @@ func (repository *memoryServiceRepository) Register(service domain.Service) doma
 	return service
 }
 
-func (repository *memoryServiceRepository) Deregister(name, id string, _ int64) bool {
-	key := domain.Service{Name: name, ID: id}.Key()
+func (repository *memoryServiceRepository) Deregister(name string, _ int64) bool {
+	key := domain.Service{Name: name}.Key()
 	if _, ok := repository.services[key]; !ok {
 		return false
 	}
@@ -27,20 +27,8 @@ func (repository *memoryServiceRepository) Deregister(name, id string, _ int64) 
 	return true
 }
 
-func (repository *memoryServiceRepository) Heartbeat(name, id string, health domain.HealthStatus, at int64) (domain.Service, bool) {
-	key := domain.Service{Name: name, ID: id}.Key()
-	service, ok := repository.services[key]
-	if !ok {
-		return domain.Service{}, false
-	}
-	service.Health = health
-	service.LastHeartbeat = at
-	repository.services[key] = service
-	return service, true
-}
-
-func (repository *memoryServiceRepository) Find(name, id string) []domain.Service {
-	service, ok := repository.services[(domain.Service{Name: name, ID: id}).Key()]
+func (repository *memoryServiceRepository) Find(name string) []domain.Service {
+	service, ok := repository.services[(domain.Service{Name: name}).Key()]
 	if !ok {
 		return nil
 	}
@@ -61,14 +49,12 @@ func TestServiceRegistryNormalizesAndAppliesDefaults(t *testing.T) {
 
 	service, err := registry.Register(domain.Service{
 		Name:     " users ",
-		ID:       " users-1 ",
 		Endpoint: " users:8080 ",
-		Version:  " v1 ",
 	})
 	if err != nil {
 		t.Fatalf("register returned error: %v", err)
 	}
-	if service.Name != "users" || service.ID != "users-1" {
+	if service.Name != "users" {
 		t.Fatalf("service identity was not normalized: %+v", service)
 	}
 	if service.Health != domain.HealthServing {

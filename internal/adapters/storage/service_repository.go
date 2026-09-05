@@ -19,20 +19,12 @@ func (repository *ServiceRepository) Register(service domain.Service) domain.Ser
 	return fromProto(stored)
 }
 
-func (repository *ServiceRepository) Deregister(name, id string, now int64) bool {
-	return repository.store.Remove(name, id, now)
+func (repository *ServiceRepository) Deregister(name string, now int64) bool {
+	return repository.store.Remove(name, now)
 }
 
-func (repository *ServiceRepository) Heartbeat(name, id string, health domain.HealthStatus, at int64) (domain.Service, bool) {
-	stored, ok := repository.store.UpdateHeartbeat(name, id, toProtoHealth(health), at)
-	if !ok {
-		return domain.Service{}, false
-	}
-	return fromProto(stored), true
-}
-
-func (repository *ServiceRepository) Find(name, id string) []domain.Service {
-	records := repository.store.Get(name, id)
+func (repository *ServiceRepository) Find(name string) []domain.Service {
+	records := repository.store.Get(name)
 	services := make([]domain.Service, 0, len(records))
 	for _, record := range records {
 		services = append(services, fromProto(record))
@@ -51,14 +43,11 @@ func (repository *ServiceRepository) List() []domain.Service {
 
 func toProto(service domain.Service) *apiv1.ServiceRecord {
 	return &apiv1.ServiceRecord{
-		ServiceName:       service.Name,
-		ServiceId:         service.ID,
-		Endpoint:          service.Endpoint,
-		Version:           service.Version,
-		HealthStatus:      toProtoHealth(service.Health),
-		LastHeartbeatUnix: service.LastHeartbeat,
-		OwnerNodeId:       service.OwnerNode,
-		LogicalVersion:    service.LogicalVersion,
+		ServiceName:    service.Name,
+		Endpoint:       service.Endpoint,
+		HealthStatus:   toProtoHealth(service.Health),
+		OwnerNodeId:    service.OwnerNode,
+		LogicalVersion: service.LogicalVersion,
 	}
 }
 
@@ -68,11 +57,8 @@ func fromProto(record *apiv1.ServiceRecord) domain.Service {
 	}
 	return domain.Service{
 		Name:           record.GetServiceName(),
-		ID:             record.GetServiceId(),
 		Endpoint:       record.GetEndpoint(),
-		Version:        record.GetVersion(),
 		Health:         fromProtoHealth(record.GetHealthStatus()),
-		LastHeartbeat:  record.GetLastHeartbeatUnix(),
 		OwnerNode:      record.GetOwnerNodeId(),
 		LogicalVersion: record.GetLogicalVersion(),
 	}

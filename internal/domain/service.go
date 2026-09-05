@@ -13,30 +13,25 @@ const (
 
 type Service struct {
 	Name           string
-	ID             string
 	Endpoint       string
-	Version        string
 	Health         HealthStatus
-	LastHeartbeat  int64
 	OwnerNode      string
 	LogicalVersion uint64
 }
 
 func (service Service) Key() string {
-	return strings.TrimSpace(service.Name) + "|" + strings.TrimSpace(service.ID)
+	return strings.TrimSpace(service.Name)
 }
 
 func (service Service) IsTombstone() bool {
-	return service.Health == HealthNotServing && service.Endpoint == "" && service.Version == ""
+	return service.Health == HealthNotServing && service.Endpoint == ""
 }
 
 func NormalizeService(service Service) (Service, bool) {
 	service.Name = strings.TrimSpace(service.Name)
-	service.ID = strings.TrimSpace(service.ID)
 	service.Endpoint = strings.TrimSpace(service.Endpoint)
-	service.Version = strings.TrimSpace(service.Version)
 	service.OwnerNode = strings.TrimSpace(service.OwnerNode)
-	if service.Name == "" || service.ID == "" {
+	if service.Name == "" || service.Endpoint == "" {
 		return Service{}, false
 	}
 	return service, true

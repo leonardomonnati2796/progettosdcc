@@ -3,7 +3,6 @@ node:
   id: registry-node-1
   listen_address: 0.0.0.0:50051
   advertise_address: registry-node-1:50051
-  storage_dir: /app/data
 
 cluster:
   # Tutti i nodi condividono lo stesso elenco di peer iniziali.
@@ -18,6 +17,3 @@ cluster:
   peer_timeout_seconds: 8
   max_gossip_fanout: 2
 
-service:
-  # TTL condiviso per rendere omogenea la rilevazione dei servizi inattivi.
-  heartbeat_ttl_seconds: 60

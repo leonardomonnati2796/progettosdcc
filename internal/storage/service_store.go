@@ -17,7 +17,6 @@ type ServiceStore struct {
 
 const (
 	tombstoneEndpoint = ""
-	tombstoneVersion  = ""
 )
 
 func NewServiceStore() *ServiceStore {
@@ -80,7 +79,7 @@ func (s *ServiceStore) ReplaceAll(records []*apiv1.ServiceRecord) {
 		if normalized.LogicalVersion == 0 {
 			normalized.LogicalVersion = 1
 		}
-		replaced[recordKey(normalized.GetServiceName(), normalized.GetServiceId())] = normalized
+		replaced[recordKey(normalized.GetServiceName())] = normalized
 	}
 
 	s.mu.Lock()
@@ -94,7 +93,7 @@ func (s *ServiceStore) Upsert(record *apiv1.ServiceRecord) *apiv1.ServiceRecord 
 		return nil
 	}
 
-	key := recordKey(normalized.GetServiceName(), normalized.GetServiceId())
+	key := recordKey(normalized.GetServiceName())
 
 	s.mu.Lock()
 
@@ -120,9 +119,9 @@ func (s *ServiceStore) Upsert(record *apiv1.ServiceRecord) *apiv1.ServiceRecord 
 	return out
 }
 
-func (s *ServiceStore) Remove(serviceName, serviceID string, nowUnix int64) bool {
+func (s *ServiceStore) Remove(serviceName string, nowUnix int64) bool {
 	// Rimuove esegue la logica della funzione..
-	key := recordKey(serviceName, serviceID)
+	key := recordKey(serviceName)
 	if nowUnix == 0 {
 		nowUnix = 1
 	}
@@ -140,7 +139,6 @@ func (s *ServiceStore) Remove(serviceName, serviceID string, nowUnix int64) bool
 	}
 	tombstone := cloneRecord(existing)
 	tombstone.Endpoint = tombstoneEndpoint
-	tombstone.Version = tombstoneVersion
 	tombstone.HealthStatus = apiv1.HealthStatus_HEALTH_STATUS_NOT_SERVING
 	tombstone.LogicalVersion++
 	s.records[key] = tombstone
@@ -149,52 +147,16 @@ func (s *ServiceStore) Remove(serviceName, serviceID string, nowUnix int64) bool
 	return true
 }
 
-func (s *ServiceStore) UpdateHeartbeat(serviceName, serviceID string, status apiv1.HealthStatus, heartbeatUnix int64) (*apiv1.ServiceRecord, bool) {
-	// Aggiorna heartbeat.
-	key := recordKey(serviceName, serviceID)
-
-	s.mu.Lock()
-
-	existing, exists := s.records[key]
-	if !exists || isTombstone(existing) {
-		s.mu.Unlock()
-		return nil, false
-	}
-
-	existing.HealthStatus = status
-	existing.LastHeartbeatUnix = heartbeatUnix
-	existing.LogicalVersion++
-
-	out := cloneRecord(existing)
-	s.mu.Unlock()
-	s.emitChange()
-	return out, true
-}
-
-func (s *ServiceStore) Get(serviceName, serviceID string) []*apiv1.ServiceRecord {
+func (s *ServiceStore) Get(serviceName string) []*apiv1.ServiceRecord {
 	// Recupera esegue la logica della funzione..
 	normalizedName := strings.TrimSpace(serviceName)
-	normalizedID := strings.TrimSpace(serviceID)
-
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-
-	if normalizedID != "" {
-		record, exists := s.records[recordKey(normalizedName, normalizedID)]
-		if !exists || isTombstone(record) {
-			return nil
-		}
-		return []*apiv1.ServiceRecord{cloneRecord(record)}
+	record, exists := s.records[recordKey(normalizedName)]
+	if !exists || isTombstone(record) {
+		return nil
 	}
-
-	matches := make([]*apiv1.ServiceRecord, 0)
-	for _, record := range s.records {
-		if record.GetServiceName() == normalizedName && !isTombstone(record) {
-			matches = append(matches, cloneRecord(record))
-		}
-	}
-	sortRecords(matches)
-	return matches
+	return []*apiv1.ServiceRecord{cloneRecord(record)}
 }
 
 func (s *ServiceStore) List() []*apiv1.ServiceRecord {
@@ -251,7 +213,7 @@ func (s *ServiceStore) MergeRemote(records []*apiv1.ServiceRecord) int {
 			incoming.LogicalVersion = 1
 		}
 
-		key := recordKey(incoming.GetServiceName(), incoming.GetServiceId())
+		key := recordKey(incoming.GetServiceName())
 		current, exists := s.records[key]
 		if !exists {
 			s.records[key] = incoming
@@ -272,36 +234,6 @@ func (s *ServiceStore) MergeRemote(records []*apiv1.ServiceRecord) int {
 	return updated
 }
 
-func (s *ServiceStore) MarkStale(nowUnix int64, heartbeatTTLSeconds int64) int {
-	// Esegue la logica di mark stale.
-	if heartbeatTTLSeconds <= 0 {
-		return 0
-	}
-
-	s.mu.Lock()
-
-	updated := 0
-	for _, record := range s.records {
-		if isTombstone(record) {
-			continue
-		}
-		if nowUnix-record.GetLastHeartbeatUnix() <= heartbeatTTLSeconds {
-			continue
-		}
-		if record.GetHealthStatus() == apiv1.HealthStatus_HEALTH_STATUS_NOT_SERVING {
-			continue
-		}
-		record.HealthStatus = apiv1.HealthStatus_HEALTH_STATUS_NOT_SERVING
-		record.LogicalVersion++
-		updated++
-	}
-	s.mu.Unlock()
-	if updated > 0 {
-		s.emitChange()
-	}
-	return updated
-}
-
 func (s *ServiceStore) emitChange() {
 	// Esegue la logica di emit change.
 	s.mu.RLock()
@@ -312,8 +244,8 @@ func (s *ServiceStore) emitChange() {
 	}
 }
 
-func recordKey(serviceName, serviceID string) string {
-	return strings.TrimSpace(serviceName) + "|" + strings.TrimSpace(serviceID)
+func recordKey(serviceName string) string {
+	return strings.TrimSpace(serviceName)
 }
 
 func normalizeRecord(record *apiv1.ServiceRecord) (*apiv1.ServiceRecord, bool) {
@@ -323,12 +255,10 @@ func normalizeRecord(record *apiv1.ServiceRecord) (*apiv1.ServiceRecord, bool) {
 
 	normalized := cloneRecord(record)
 	normalized.ServiceName = strings.TrimSpace(normalized.GetServiceName())
-	normalized.ServiceId = strings.TrimSpace(normalized.GetServiceId())
-	if normalized.ServiceName == "" || normalized.ServiceId == "" {
+	if normalized.ServiceName == "" {
 		return nil, false
 	}
 	normalized.Endpoint = strings.TrimSpace(normalized.GetEndpoint())
-	normalized.Version = strings.TrimSpace(normalized.GetVersion())
 	normalized.OwnerNodeId = strings.TrimSpace(normalized.GetOwnerNodeId())
 	return normalized, true
 }
@@ -339,14 +269,11 @@ func cloneRecord(record *apiv1.ServiceRecord) *apiv1.ServiceRecord {
 		return nil
 	}
 	return &apiv1.ServiceRecord{
-		ServiceName:       record.GetServiceName(),
-		ServiceId:         record.GetServiceId(),
-		Endpoint:          record.GetEndpoint(),
-		Version:           record.GetVersion(),
-		HealthStatus:      record.GetHealthStatus(),
-		LastHeartbeatUnix: record.GetLastHeartbeatUnix(),
-		OwnerNodeId:       record.GetOwnerNodeId(),
-		LogicalVersion:    record.GetLogicalVersion(),
+		ServiceName:    record.GetServiceName(),
+		Endpoint:       record.GetEndpoint(),
+		HealthStatus:   record.GetHealthStatus(),
+		OwnerNodeId:    record.GetOwnerNodeId(),
+		LogicalVersion: record.GetLogicalVersion(),
 	}
 }
 
@@ -356,7 +283,7 @@ func sortRecords(records []*apiv1.ServiceRecord) {
 		left := records[i]
 		right := records[j]
 		if left.GetServiceName() == right.GetServiceName() {
-			return left.GetServiceId() < right.GetServiceId()
+			return false
 		}
 		return left.GetServiceName() < right.GetServiceName()
 	})
@@ -367,9 +294,6 @@ func shouldReplaceRecord(local, incoming *apiv1.ServiceRecord) bool {
 	if incoming.GetLogicalVersion() != local.GetLogicalVersion() {
 		return incoming.GetLogicalVersion() > local.GetLogicalVersion()
 	}
-	if incoming.GetLastHeartbeatUnix() != local.GetLastHeartbeatUnix() {
-		return incoming.GetLastHeartbeatUnix() > local.GetLastHeartbeatUnix()
-	}
 	if incoming.GetHealthStatus() != local.GetHealthStatus() {
 		return incoming.GetHealthStatus() > local.GetHealthStatus()
 	}
@@ -378,9 +302,6 @@ func shouldReplaceRecord(local, incoming *apiv1.ServiceRecord) bool {
 	}
 	if incoming.GetEndpoint() != local.GetEndpoint() {
 		return incoming.GetEndpoint() > local.GetEndpoint()
-	}
-	if incoming.GetVersion() != local.GetVersion() {
-		return incoming.GetVersion() > local.GetVersion()
 	}
 	return false
 }
@@ -392,5 +313,5 @@ func isTombstone(record *apiv1.ServiceRecord) bool {
 	}
 	return record.GetHealthStatus() == apiv1.HealthStatus_HEALTH_STATUS_NOT_SERVING &&
 		record.GetEndpoint() == tombstoneEndpoint &&
-		record.GetVersion() == tombstoneVersion
+		record.GetEndpoint() == ""
 }
