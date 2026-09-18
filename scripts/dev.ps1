@@ -84,7 +84,7 @@ CLI:     cli <register|deregister|list|get> [flags]
 
 Crash:   crash arresta un nodo casuale; crash -count N arresta N nodi casuali (massimo N-2)
 
-Make equivalents:
+Scripts list:
   .\scripts\dev.ps1 trace-up
   .\scripts\dev.ps1 select-service
   .\scripts\dev.ps1 register
