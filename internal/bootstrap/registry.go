@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"google.golang.org/grpc"
 
@@ -33,7 +32,6 @@ func Run(configPath string) {
 
 	store := storage.NewServiceStore()
 	peerStore := storage.NewPeerStore()
-	peerStore.UpsertSelf(cfg.Node.ID, cfg.Node.AdvertiseAddress, time.Now().Unix())
 
 	serviceServer := registry.NewServiceRegistryServer(
 		store,

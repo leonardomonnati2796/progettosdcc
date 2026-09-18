@@ -30,13 +30,8 @@ func TestNewRuntimeCreatesWorkingRuntime(t *testing.T) {
 	if r == nil {
 		t.Fatal("expected runtime instance")
 	}
-	if r == nil {
-		t.Fatal("runtime should not be nil")
-	}
-	if r != nil {
-		r.Start()
-		t.Cleanup(r.Stop)
-	}
+	r.Start()
+	t.Cleanup(r.Stop)
 }
 
 func TestRuntimeBootstrapGossipAndReconcile(t *testing.T) {

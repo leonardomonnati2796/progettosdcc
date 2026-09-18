@@ -36,15 +36,15 @@ type testNode struct {
 
 func startTestNode(t *testing.T, id string, seedPeers []string) *testNode {
 	// Avvia l'esecuzione del componente.
-	return startTestNodeWithPersistenceAndPeerTimeout(t, id, seedPeers, "", 2)
+	return startTestNodeWithPeerTimeout(t, id, seedPeers, 2)
 }
 
-func startTestNodeWithPersistence(t *testing.T, id string, seedPeers []string, storageDir string) *testNode {
+func startTestNodeWithPeerTimeout(t *testing.T, id string, seedPeers []string, peerTimeoutSeconds int) *testNode {
 	// Avvia l'esecuzione del componente.
-	return startTestNodeWithPersistenceAndPeerTimeout(t, id, seedPeers, storageDir, 2)
+	return startTestNodeWithPeerTimeoutValue(t, id, seedPeers, peerTimeoutSeconds)
 }
 
-func startTestNodeWithPersistenceAndPeerTimeout(t *testing.T, id string, seedPeers []string, storageDir string, peerTimeoutSeconds int) *testNode {
+func startTestNodeWithPeerTimeoutValue(t *testing.T, id string, seedPeers []string, peerTimeoutSeconds int) *testNode {
 	// Avvia l'esecuzione del componente.
 	t.Helper()
 
@@ -71,7 +71,6 @@ func startTestNodeWithPersistenceAndPeerTimeout(t *testing.T, id string, seedPee
 
 	serviceStore := storage.NewServiceStore()
 	peerStore := storage.NewPeerStore()
-	_ = storageDir
 	peerStore.UpsertSelf(id, address, time.Now().Unix())
 
 	grpcServer := grpc.NewServer()
@@ -173,7 +172,7 @@ func TestCrashResumeAndStateRealignment(t *testing.T) {
 	nodeC := startTestNode(t, "node-c", []string{nodeA.address})
 	defer nodeC.Stop()
 
-	nodeB := startTestNodeWithPersistence(t, "node-b", []string{nodeA.address}, "")
+	nodeB := startTestNode(t, "node-b", []string{nodeA.address})
 
 	waitFor(t, 8*time.Second, "node-a sees node-b and node-c", func() bool {
 		peers := nodeA.peers.List()
@@ -208,7 +207,7 @@ func TestCrashResumeAndStateRealignment(t *testing.T) {
 		t.Fatalf("register service on node-a failed: %v", err)
 	}
 
-	nodeBResumed := startTestNodeWithPersistence(t, "node-b", []string{nodeA.address}, "")
+	nodeBResumed := startTestNode(t, "node-b", []string{nodeA.address})
 	defer nodeBResumed.Stop()
 
 	waitFor(t, 8*time.Second, "node-a sees resumed node-b", func() bool {
@@ -257,10 +256,10 @@ func TestDeregisterConvergesAcrossNodes(t *testing.T) {
 
 func TestGracefulLeaveConvergesWithoutPeerTimeout(t *testing.T) {
 	// Esegue il test per graceful leave converges without peer timeout.
-	nodeA := startTestNodeWithPersistenceAndPeerTimeout(t, "node-a", nil, "", 30)
+	nodeA := startTestNodeWithPeerTimeout(t, "node-a", nil, 30)
 	defer nodeA.Stop()
 
-	nodeB := startTestNodeWithPersistenceAndPeerTimeout(t, "node-b", []string{nodeA.address}, "", 30)
+	nodeB := startTestNodeWithPeerTimeout(t, "node-b", []string{nodeA.address}, 30)
 	defer nodeB.Stop()
 
 	waitFor(t, 5*time.Second, "node-a sees node-b", func() bool {

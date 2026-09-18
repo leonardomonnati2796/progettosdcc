@@ -170,8 +170,9 @@ Quando il binario Go viene avviato, il processo segue quattro passaggi principal
     \item \textbf{Lettura della configurazione:} il flag \texttt{-config} seleziona il profilo YAML del nodo.
     \item \textbf{Rete e stato iniziale:} viene aperto il listener e il nodo parte con uno store locale vuoto.
     \item \textbf{Server gRPC:} vengono registrate le API per client e peer sullo stesso server.
-    \item \textbf{Runtime asincroni:} vengono avviati gossip, reconcile e membership sweep.
+    \item \textbf{Runtime asincroni:} viene avviato il runtime gossip, che registra il nodo nella membership locale e avvia gossip, reconcile e membership sweep.
 \end{enumerate}
+  L'inizializzazione della membership locale e' centralizzata nel metodo \texttt{Runtime.Start()}, evitando registrazioni duplicate durante il bootstrap applicativo.
 Alla ricezione di $\text{SIGINT}$ o $\text{SIGTERM}$ il processo ferma i runtime, comunica il proprio \textit{Graceful Leave} ai peer e arresta il server gRPC in modo ordinato.
 
 \subsection{Topologia Gossip e il Meccanismo del Gossip Gate}
