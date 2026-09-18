@@ -32,6 +32,28 @@ services:
     networks:
       - registry-net
 
+  registry-node-4:
+    build:
+      context: .
+      dockerfile: Dockerfile.registry
+    container_name: registry-node-4
+    command: ["-config", "/app/config/registry/node-4.yaml"]
+    ports:
+      - "50054:50051"
+    networks:
+      - registry-net
+
+  registry-node-5:
+    build:
+      context: .
+      dockerfile: Dockerfile.registry
+    container_name: registry-node-5
+    command: ["-config", "/app/config/registry/node-5.yaml"]
+    ports:
+      - "50055:50051"
+    networks:
+      - registry-net
+
   service-cli:
     build:
       context: .

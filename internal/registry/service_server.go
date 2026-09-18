@@ -77,17 +77,18 @@ func (s *ServiceRegistryServer) registerServiceRecord(ctx context.Context, in *a
 	}
 
 	record := &apiv1.ServiceRecord{
-		ServiceName:    strings.TrimSpace(in.GetServiceName()),
-		Endpoint:       strings.TrimSpace(in.GetEndpoint()),
-		HealthStatus:   healthStatus,
-		OwnerNodeId:    strings.TrimSpace(s.nodeID),
-		LogicalVersion: in.GetLogicalVersion(),
+		ServiceName:   strings.TrimSpace(in.GetServiceName()),
+		Endpoint:      strings.TrimSpace(in.GetEndpoint()),
+		HealthStatus:  healthStatus,
+		OwnerNodeId:   strings.TrimSpace(s.nodeID),
+		LamportClock:  in.GetLamportClock(),
+		LamportNodeId: strings.TrimSpace(s.nodeID),
 	}
 
 	if existing, ok := s.getActiveRecord(record.GetServiceName()); ok && isEquivalentRegisterRecord(existing, record) {
 		response := &apiv1.RegisterServiceResponse{
 			Accepted: true,
-			Message:  fmt.Sprintf("already registered %s at %s (logical_version=%d)", existing.GetServiceName(), existing.GetEndpoint(), existing.GetLogicalVersion()),
+			Message:  fmt.Sprintf("already registered %s at %s (lamport_clock=%d)", existing.GetServiceName(), existing.GetEndpoint(), existing.GetLamportClock()),
 		}
 		s.cacheRegisterResponse(requestID, response)
 		return response, nil
@@ -97,7 +98,7 @@ func (s *ServiceRegistryServer) registerServiceRecord(ctx context.Context, in *a
 
 	response := &apiv1.RegisterServiceResponse{
 		Accepted: true,
-		Message:  fmt.Sprintf("registered %s at %s (logical_version=%d)", stored.GetServiceName(), stored.GetEndpoint(), stored.GetLogicalVersion()),
+		Message:  fmt.Sprintf("registered %s at %s (lamport_clock=%d)", stored.GetServiceName(), stored.GetEndpoint(), stored.GetLamportClock()),
 	}
 	s.cacheRegisterResponse(requestID, response)
 	return response, nil
@@ -203,7 +204,12 @@ func (s *ServiceRegistryServer) DeregisterService(ctx context.Context, req *apiv
 		s.cacheDeregisterResponse(requestID, resp)
 		return resp, nil
 	}
-	resp := &apiv1.DeregisterServiceResponse{Accepted: true, Message: "service removed"}
+	marker := s.store.GetForSync(serviceName)
+	message := "service removed"
+	if marker != nil {
+		message = fmt.Sprintf("service removed (lamport_clock=%d)", marker.GetLamportClock())
+	}
+	resp := &apiv1.DeregisterServiceResponse{Accepted: true, Message: message}
 	s.store.RecordDeregisterResult(requestID, resp)
 	s.cacheDeregisterResponse(requestID, resp)
 	return resp, nil

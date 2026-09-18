@@ -11,8 +11,8 @@ type memoryServiceRepository struct {
 }
 
 func (repository *memoryServiceRepository) Register(service domain.Service) domain.Service {
-	if service.LogicalVersion == 0 {
-		service.LogicalVersion = 1
+	if service.LamportClock == 0 {
+		service.LamportClock = 1
 	}
 	repository.services[service.Key()] = service
 	return service
@@ -60,8 +60,8 @@ func TestServiceRegistryNormalizesAndAppliesDefaults(t *testing.T) {
 	if service.Health != domain.HealthServing {
 		t.Fatalf("expected serving default, got %v", service.Health)
 	}
-	if service.LogicalVersion != 1 {
-		t.Fatalf("expected logical version 1, got %d", service.LogicalVersion)
+	if service.LamportClock != 1 {
+		t.Fatalf("expected Lamport clock 1, got %d", service.LamportClock)
 	}
 }
 

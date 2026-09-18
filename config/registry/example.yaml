@@ -12,7 +12,6 @@ cluster:
     - registry-node-3:50051
   gossip_interval_seconds: 3
   gossip_start_delay_seconds: 0
-  gossip_gate_path: /app/data/.gossip-enabled
   reconcile_interval_seconds: 15
   peer_timeout_seconds: 10
   max_gossip_fanout: 2

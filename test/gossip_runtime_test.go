@@ -41,11 +41,11 @@ func TestRuntimeBootstrapGossipAndReconcile(t *testing.T) {
 
 	nowUnix := time.Now().Unix()
 	remoteServiceStore.Upsert(&apiv1.ServiceRecord{
-		ServiceName:    "remote-users",
-		Endpoint:       "remote-users:8080",
-		HealthStatus:   apiv1.HealthStatus_HEALTH_STATUS_SERVING,
-		OwnerNodeId:    "node-remote",
-		LogicalVersion: 1,
+		ServiceName:  "remote-users",
+		Endpoint:     "remote-users:8080",
+		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
+		OwnerNodeId:  "node-remote",
+		LamportClock: 1,
 	})
 
 	localServices := storage.NewServiceStore()
@@ -80,11 +80,11 @@ func TestRuntimeBootstrapGossipAndReconcile(t *testing.T) {
 	localPeers.Upsert(&apiv1.NodeInfo{NodeId: "node-remote", GrpcAddress: remoteAddress, UpdatedAtUnix: nowUnix})
 
 	localServices.Upsert(&apiv1.ServiceRecord{
-		ServiceName:    "local-orders",
-		Endpoint:       "local-orders:8080",
-		HealthStatus:   apiv1.HealthStatus_HEALTH_STATUS_SERVING,
-		OwnerNodeId:    "node-local",
-		LogicalVersion: 1,
+		ServiceName:  "local-orders",
+		Endpoint:     "local-orders:8080",
+		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
+		OwnerNodeId:  "node-local",
+		LamportClock: 1,
 	})
 
 	if merged := remoteServiceStore.MergeRemote(localServices.ListForSync()); merged != 1 {
@@ -95,11 +95,11 @@ func TestRuntimeBootstrapGossipAndReconcile(t *testing.T) {
 	}
 
 	remoteServiceStore.Upsert(&apiv1.ServiceRecord{
-		ServiceName:    "remote-payments",
-		Endpoint:       "remote-payments:8080",
-		HealthStatus:   apiv1.HealthStatus_HEALTH_STATUS_SERVING,
-		OwnerNodeId:    "node-remote",
-		LogicalVersion: 1,
+		ServiceName:  "remote-payments",
+		Endpoint:     "remote-payments:8080",
+		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
+		OwnerNodeId:  "node-remote",
+		LamportClock: 1,
 	})
 
 	if merged := localServices.MergeRemote(remoteServiceStore.ListForSync()); merged != 2 {

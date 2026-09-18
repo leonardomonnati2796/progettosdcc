@@ -223,6 +223,80 @@ func TestCrashResumeAndStateRealignment(t *testing.T) {
 	})
 }
 
+func TestMultipleNodeCrashesAndRecovery(t *testing.T) {
+	// Verifica il crash simultaneo di piu nodi e il successivo riallineamento.
+	nodeA := startTestNode(t, "node-a", nil)
+	defer nodeA.Stop()
+
+	nodeB := startTestNode(t, "node-b", []string{nodeA.address})
+	nodeC := startTestNode(t, "node-c", []string{nodeA.address})
+	nodeD := startTestNode(t, "node-d", []string{nodeA.address})
+	nodeE := startTestNode(t, "node-e", []string{nodeA.address})
+	defer nodeD.Stop()
+	defer nodeE.Stop()
+
+	waitFor(t, 8*time.Second, "node-a sees all peers", func() bool {
+		peers := nodeA.peers.List()
+		return hasPeer(peers, "node-b") && hasPeer(peers, "node-c") &&
+			hasPeer(peers, "node-d") && hasPeer(peers, "node-e")
+	})
+
+	if err := registerService(nodeB.address, &apiv1.ServiceRecord{
+		ServiceName:  "billing",
+		Endpoint:     "billing-1:8080",
+		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
+	}); err != nil {
+		t.Fatalf("register billing service on node-b failed: %v", err)
+	}
+	if err := registerService(nodeC.address, &apiv1.ServiceRecord{
+		ServiceName:  "catalog",
+		Endpoint:     "catalog-1:8080",
+		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
+	}); err != nil {
+		t.Fatalf("register catalog service on node-c failed: %v", err)
+	}
+
+	waitFor(t, 8*time.Second, "services converge before crashes", func() bool {
+		return hasService(nodeA.service.List(), "billing") && hasService(nodeA.service.List(), "catalog")
+	})
+
+	nodeB.Stop()
+	nodeC.Stop()
+
+	waitFor(t, 10*time.Second, "both crashed peers are pruned", func() bool {
+		peers := nodeA.peers.List()
+		return !hasPeer(peers, "node-b") && !hasPeer(peers, "node-c") &&
+			hasPeer(peers, "node-d") && hasPeer(peers, "node-e")
+	})
+
+	if err := registerService(nodeA.address, &apiv1.ServiceRecord{
+		ServiceName:  "orders",
+		Endpoint:     "orders-1:8080",
+		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
+	}); err != nil {
+		t.Fatalf("register orders service on node-a failed: %v", err)
+	}
+
+	nodeBResumed := startTestNode(t, "node-b", []string{nodeA.address})
+	nodeCResumed := startTestNode(t, "node-c", []string{nodeA.address})
+	defer nodeBResumed.Stop()
+	defer nodeCResumed.Stop()
+
+	waitFor(t, 8*time.Second, "resumed peers rejoin the cluster", func() bool {
+		peers := nodeA.peers.List()
+		return hasPeer(peers, "node-b") && hasPeer(peers, "node-c")
+	})
+
+	waitFor(t, 8*time.Second, "resumed node-b recovers all services", func() bool {
+		services := nodeBResumed.service.List()
+		return hasService(services, "billing") && hasService(services, "catalog") && hasService(services, "orders")
+	})
+	waitFor(t, 8*time.Second, "resumed node-c recovers all services", func() bool {
+		services := nodeCResumed.service.List()
+		return hasService(services, "billing") && hasService(services, "catalog") && hasService(services, "orders")
+	})
+}
+
 func TestDeregisterConvergesAcrossNodes(t *testing.T) {
 	// Esegue il test per deregister converges across nodes.
 	nodeA := startTestNode(t, "node-a", nil)

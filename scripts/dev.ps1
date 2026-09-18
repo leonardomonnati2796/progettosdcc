@@ -9,7 +9,7 @@ param(
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 $ComposeFile = Join-Path $Root "deploy/docker-compose.yml"
-$Targets = "registry-node-1:50051,registry-node-2:50051,registry-node-3:50051"
+$Targets = "registry-node-1:50051,registry-node-2:50051,registry-node-3:50051,registry-node-4:50051,registry-node-5:50051"
 $StateFile = Join-Path $Root ".trace-up.state"
 $ServiceStateFile = Join-Path $Root ".trace-service.state"
 $CrashStateFile = Join-Path $Root ".trace-crash.state"
@@ -34,32 +34,44 @@ function Get-Option {
 }
 
 function Read-ServiceState {
-    if (-not (Test-Path $ServiceStateFile)) { & $PSCommandPath select-service }
+    if (-not (Test-Path $ServiceStateFile)) {
+        throw "Nessun servizio selezionato. Esegui prima '.\scripts\dev.ps1 select-service'."
+    }
     $state = @{}
     Get-Content $ServiceStateFile | ForEach-Object {
         $parts = $_ -split "=", 2
         if ($parts.Count -eq 2) { $state[$parts[0]] = $parts[1] }
     }
+    if ([string]::IsNullOrWhiteSpace($state["TRACE_SERVICE_NAME"]) -or
+        [string]::IsNullOrWhiteSpace($state["TRACE_SERVICE_ENDPOINT"])) {
+        throw "Nessun servizio selezionato. Esegui prima '.\scripts\dev.ps1 select-service'."
+    }
     return $state
 }
 
-function Enable-Gossip {
-    foreach ($node in @("registry-node-1", "registry-node-2", "registry-node-3")) {
-        Invoke-Compose @("exec", "-T", $node, "sh", "-c", "touch /app/data/.gossip-enabled")
-    }
-}
-
 function Get-RandomRegistryNode {
-    return @("registry-node-1", "registry-node-2", "registry-node-3") | Get-Random
+    return Get-RegistryNodes | Get-Random
 }
 
-function Get-CrashNode {
+function Get-RegistryNodes {
+    return @("registry-node-1", "registry-node-2", "registry-node-3", "registry-node-4", "registry-node-5")
+}
+
+function Get-CrashNodes {
     if (Test-Path $CrashStateFile) {
-        return (Get-Content $CrashStateFile | Select-Object -First 1).Trim()
+        return @(Get-Content $CrashStateFile | ForEach-Object { $_.Trim() } | Where-Object { $_ })
     }
-    return Get-RandomRegistryNode
+    return @()
 }
 
+function Show-ClusterServices {
+    foreach ($node in Get-RegistryNodes) {
+        Write-Host "--- $node`:50051 ---"
+        Invoke-Cli @("list", "-targets", "$node`:50051")
+    }
+}
+
+try {
 switch ($Command.ToLowerInvariant()) {
     "help" {
         Write-Host @"
@@ -69,6 +81,8 @@ Go:      build | build-cli | test | test-integration | proto | tidy | lint
 Cluster: trace-up | select-service | register | discovery | crash | recover | verify-resilience | deregister | down
          up | status | logs | list
 CLI:     cli <register|deregister|list|get> [flags]
+
+Crash:   crash arresta un nodo casuale; crash -count N arresta N nodi casuali (massimo N-2)
 
 Make equivalents:
   make trace-up       -> .\scripts\dev.ps1 trace-up
@@ -98,13 +112,15 @@ Make equivalents:
     }
     "trace-up" {
         Invoke-Compose @("down", "--remove-orphans")
-        Invoke-Compose @("up", "-d", "--build", "registry-node-1", "registry-node-2", "registry-node-3")
+        Remove-Item $ServiceStateFile, $CrashStateFile -Force -ErrorAction SilentlyContinue
+        Invoke-Compose (@("up", "-d", "--build") + (Get-RegistryNodes))
         Invoke-Compose @("build", "service-cli")
         New-Item $StateFile -ItemType File -Force | Out-Null
         Write-Host "Cluster avviato. Ora esegui select-service e register."
     }
     "select-service" {
         $profile = Get-Option $Arguments "-profile"
+        $endpointOverride = Get-Option $Arguments "-endpoint"
         if (-not $profile -or $profile -eq "users" -or $profile -eq "random") {
             $profile = @("identity", "billing", "payments", "catalog") | Get-Random
         }
@@ -117,32 +133,43 @@ Make equivalents:
             "catalog" { $name = "catalog-api"; $endpoint = "203.0.113.40:8080" }
             default { $name = "identity-api"; $endpoint = "203.0.113.10:8080" }
         }
+        if (-not [string]::IsNullOrWhiteSpace($endpointOverride)) {
+            $endpoint = $endpointOverride.Trim()
+        }
         @("TRACE_SERVICE_NAME=$name", "TRACE_SERVICE_ENDPOINT=$endpoint") | Set-Content $ServiceStateFile
 		Write-Host "Servizio selezionato casualmente: $name"
     }
     "register" {
         $state = Read-ServiceState
         $serviceTargets = Get-Option $Arguments "-targets" $Targets
-        Invoke-Cli @("register", "-targets", $serviceTargets, "-name", $state["TRACE_SERVICE_NAME"], "-endpoint", $state["TRACE_SERVICE_ENDPOINT"], "-trace-register", "true")
-        Enable-Gossip
+        Invoke-Cli @("register", "-targets", $serviceTargets, "-name", $state["TRACE_SERVICE_NAME"], "-endpoint", $state["TRACE_SERVICE_ENDPOINT"])
         Start-Sleep -Seconds 3
-        Invoke-Cli @("list", "-targets", $Targets)
+        Show-ClusterServices
     }
     "crash" {
-        $node = Get-RandomRegistryNode
-        $node | Set-Content $CrashStateFile
-        Invoke-Compose @("stop", $node)
-        Write-Host "Fault injection: arrestato casualmente $node."
+        $count = [int](Get-Option $Arguments "-count" "1")
+        $registryNodes = @(Get-RegistryNodes)
+        $availableNodes = @($registryNodes | Where-Object { $_ -notin @(Get-CrashNodes) })
+        $maxCrashCount = $registryNodes.Count - 2
+        if ($count -lt 1 -or $count -gt $maxCrashCount -or $count -gt $availableNodes.Count) {
+            throw "-count deve essere compreso tra 1 e $maxCrashCount, lasciando almeno due nodi attivi."
+        }
+
+        $nodes = @($availableNodes | Sort-Object { Get-Random } | Select-Object -First $count)
+        $nodes | Set-Content $CrashStateFile
+        Invoke-Compose (@("stop") + $nodes)
+        Write-Host "Fault injection: arrestati $($nodes -join ', ')."
     }
     "recover" {
-        $node = Get-CrashNode
-        Invoke-Compose @("start", $node)
+        $nodes = @(Get-CrashNodes)
+        if ($nodes.Count -eq 0) { throw "Nessun nodo in crash da recuperare." }
+        Invoke-Compose (@("start") + $nodes)
         Remove-Item $CrashStateFile -Force -ErrorAction SilentlyContinue
-        Write-Host "Recovery: riavviato $node."
+        Write-Host "Recovery: riavviati $($nodes -join ', ')."
     }
     "verify-resilience" {
-        $node = Get-CrashNode
-        $activeTargets = @("registry-node-1:50051", "registry-node-2:50051", "registry-node-3:50051") | Where-Object { $_ -notlike "$node`:*" }
+        $crashedNodes = @(Get-CrashNodes)
+        $activeTargets = Get-RegistryNodes | Where-Object { $_ -notin $crashedNodes } | ForEach-Object { "$_`:50051" }
         Invoke-Cli @("list", "-targets", ($activeTargets -join ","))
     }
     "discovery" {
@@ -154,23 +181,29 @@ Make equivalents:
         Invoke-Cli @("get", "-targets", (Get-Option $Arguments "-targets" $Targets), "-name", $name)
     }
     "deregister" {
-        $state = Read-ServiceState
-        Invoke-Cli @("deregister", "-targets", (Get-Option $Arguments "-targets" $Targets), "-name", $state["TRACE_SERVICE_NAME"])
+        $serviceName = Get-Option $Arguments "-name"
+        if ([string]::IsNullOrWhiteSpace($serviceName)) {
+            $serviceName = Read-Host "Inserisci il nome del servizio da deregistrare"
+        }
+        if ([string]::IsNullOrWhiteSpace($serviceName)) {
+            throw "Il nome del servizio è obbligatorio."
+        }
+        Invoke-Cli @("deregister", "-targets", (Get-Option $Arguments "-targets" $Targets), "-name", $serviceName.Trim())
         Start-Sleep -Seconds 3
-        Invoke-Cli @("list", "-targets", $Targets)
+        Show-ClusterServices
     }
-    "up" { Invoke-Compose @("build", "registry-node-1", "registry-node-2", "registry-node-3", "service-cli"); Invoke-Compose @("up", "-d", "registry-node-1", "registry-node-2", "registry-node-3") }
+    "up" { Remove-Item $ServiceStateFile, $CrashStateFile -Force -ErrorAction SilentlyContinue; Invoke-Compose (@("build") + (Get-RegistryNodes) + @("service-cli")); Invoke-Compose (@("up", "-d") + (Get-RegistryNodes)) }
     "build-cli" { Invoke-Compose @("build", "service-cli") }
     "down" { Invoke-Compose @("down", "--remove-orphans"); Remove-Item $StateFile, $ServiceStateFile, $CrashStateFile -Force -ErrorAction SilentlyContinue }
     "logs" { Invoke-Compose @("logs", "-f") }
     "status" { Invoke-Compose @("ps") }
-    "list" { Invoke-Cli @("list", "-targets", $Targets) }
+    "list" { Show-ClusterServices }
     "trace" {
         & $PSCommandPath trace-up
         & $PSCommandPath select-service -profile random
         & $PSCommandPath register
         & $PSCommandPath discovery
-        & $PSCommandPath crash
+        & $PSCommandPath crash -count 2
         & $PSCommandPath verify-resilience
         & $PSCommandPath recover
         & $PSCommandPath discovery
@@ -182,4 +215,9 @@ Make equivalents:
         Invoke-Cli $Arguments
     }
     default { throw "Comando sconosciuto '$Command'. Usa '.\scripts\dev.ps1 help'." }
+}
+}
+catch {
+    Write-Host $_.Exception.Message -ForegroundColor Red
+    exit 1
 }

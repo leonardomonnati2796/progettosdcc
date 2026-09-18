@@ -16,10 +16,11 @@ import (
 )
 
 type outputServiceRecord struct {
-	ServiceName    string `json:"service_name,omitempty"`
-	Endpoint       string `json:"endpoint,omitempty"`
-	OwnerNodeId    string `json:"owner_node_id,omitempty"`
-	LogicalVersion uint64 `json:"logical_version,omitempty"`
+	ServiceName   string `json:"service_name,omitempty"`
+	Endpoint      string `json:"endpoint,omitempty"`
+	OwnerNodeId   string `json:"owner_node_id,omitempty"`
+	LamportClock  uint64 `json:"lamport_clock,omitempty"`
+	LamportNodeID string `json:"lamport_node_id,omitempty"`
 }
 
 func main() {
@@ -108,14 +109,15 @@ func runDeregister(args []string) {
 	requireFlag(*serviceName, "name")
 
 	rc := newClient(*targets)
-	if err := rc.Deregister(*serviceName); err != nil {
+	message, err := rc.Deregister(*serviceName)
+	if err != nil {
 		if isDeregisterNotFoundError(err) {
 			fmt.Printf("servizio non presente: %s; niente da deregistrare\n", *serviceName)
 			return
 		}
 		log.Fatal(err)
 	}
-	fmt.Println("deregister ok")
+	fmt.Println("deregister ok: " + message)
 }
 
 func runList(args []string) {
@@ -165,10 +167,11 @@ func toOutputServiceRecords(records []*apiv1.ServiceRecord) []outputServiceRecor
 			continue
 		}
 		out = append(out, outputServiceRecord{
-			ServiceName:    record.GetServiceName(),
-			Endpoint:       record.GetEndpoint(),
-			OwnerNodeId:    record.GetOwnerNodeId(),
-			LogicalVersion: record.GetLogicalVersion(),
+			ServiceName:   record.GetServiceName(),
+			Endpoint:      record.GetEndpoint(),
+			OwnerNodeId:   record.GetOwnerNodeId(),
+			LamportClock:  record.GetLamportClock(),
+			LamportNodeID: record.GetLamportNodeId(),
 		})
 	}
 	return out

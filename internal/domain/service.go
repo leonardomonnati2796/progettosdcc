@@ -12,18 +12,19 @@ const (
 )
 
 type Service struct {
-	Name           string
-	Endpoint       string
-	Health         HealthStatus
-	OwnerNode      string
-	LogicalVersion uint64
+	Name          string
+	Endpoint      string
+	Health        HealthStatus
+	OwnerNode     string
+	LamportClock  uint64
+	LamportNodeID string
 }
 
 func (service Service) Key() string {
 	return strings.TrimSpace(service.Name)
 }
 
-func (service Service) IsTombstone() bool {
+func (service Service) IsDeletionMarker() bool {
 	return service.Health == HealthNotServing && service.Endpoint == ""
 }
 

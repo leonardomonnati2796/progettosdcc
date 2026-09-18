@@ -43,11 +43,12 @@ func (repository *ServiceRepository) List() []domain.Service {
 
 func toProto(service domain.Service) *apiv1.ServiceRecord {
 	return &apiv1.ServiceRecord{
-		ServiceName:    service.Name,
-		Endpoint:       service.Endpoint,
-		HealthStatus:   toProtoHealth(service.Health),
-		OwnerNodeId:    service.OwnerNode,
-		LogicalVersion: service.LogicalVersion,
+		ServiceName:   service.Name,
+		Endpoint:      service.Endpoint,
+		HealthStatus:  toProtoHealth(service.Health),
+		OwnerNodeId:   service.OwnerNode,
+		LamportClock:  service.LamportClock,
+		LamportNodeId: service.LamportNodeID,
 	}
 }
 
@@ -56,11 +57,12 @@ func fromProto(record *apiv1.ServiceRecord) domain.Service {
 		return domain.Service{}
 	}
 	return domain.Service{
-		Name:           record.GetServiceName(),
-		Endpoint:       record.GetEndpoint(),
-		Health:         fromProtoHealth(record.GetHealthStatus()),
-		OwnerNode:      record.GetOwnerNodeId(),
-		LogicalVersion: record.GetLogicalVersion(),
+		Name:          record.GetServiceName(),
+		Endpoint:      record.GetEndpoint(),
+		Health:        fromProtoHealth(record.GetHealthStatus()),
+		OwnerNode:     record.GetOwnerNodeId(),
+		LamportClock:  record.GetLamportClock(),
+		LamportNodeID: record.GetLamportNodeId(),
 	}
 }
 

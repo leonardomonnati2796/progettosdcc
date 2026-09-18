@@ -94,8 +94,10 @@ func NewRuntime(cfg *config.RegistryConfig, serviceStore *storage.ServiceStore, 
 func (r *Runtime) Start() {
 	// Avvia l'esecuzione del componente.
 	nowUnix := time.Now().Unix()
+	r.serviceStore.SetDeletionMarkerTTL(3 * r.peerTimeout)
 	r.peerStore.UpsertSelf(r.nodeID, r.advertiseAddress, nowUnix)
 	r.lastReconcileUnix.Store(nowUnix)
+	log.Printf("gossip runtime started: node_id=%s interval=%s fanout=%d", r.nodeID, r.gossipInterval, r.maxGossipFanout)
 
 	r.wg.Add(4)
 	go r.bootstrapLoop()
@@ -209,8 +211,10 @@ func (r *Runtime) peerSweepLoop() {
 		case <-r.stopCh:
 			return
 		case <-ticker.C:
-			r.peerStore.UpsertSelf(r.nodeID, r.advertiseAddress, time.Now().Unix())
-			r.peerStore.RemoveStale(time.Now().Unix(), int64(r.peerTimeout.Seconds()), map[string]struct{}{
+			nowUnix := time.Now().Unix()
+			r.serviceStore.PurgeExpiredDeletionMarkers(nowUnix)
+			r.peerStore.UpsertSelf(r.nodeID, r.advertiseAddress, nowUnix)
+			r.peerStore.RemoveStale(nowUnix, int64(r.peerTimeout.Seconds()), map[string]struct{}{
 				r.nodeID: {},
 			})
 		}
@@ -298,6 +302,7 @@ func (r *Runtime) runGossipRound() {
 	r.peerStore.UpsertSelf(r.nodeID, r.advertiseAddress, time.Now().Unix())
 	targets := r.peerStore.RandomPeers(r.maxGossipFanout, map[string]struct{}{r.nodeID: {}})
 	if len(targets) == 0 {
+		log.Printf("gossip round: node_id=%s has no known peers, bootstrapping seeds", r.nodeID)
 		r.bootstrapFromSeeds()
 		return
 	}
@@ -317,7 +322,11 @@ func (r *Runtime) runGossipRound() {
 		if target.GetGrpcAddress() == "" {
 			continue
 		}
-		_ = r.sendGossip(target.GetGrpcAddress(), request)
+		if err := r.sendGossip(target.GetGrpcAddress(), request); err != nil {
+			log.Printf("gossip round: source=%s target=%s records=%d failed: %v", r.nodeID, target.GetNodeId(), len(records), err)
+			continue
+		}
+		log.Printf("gossip round: source=%s target=%s records=%d", r.nodeID, target.GetNodeId(), len(records))
 	}
 }
 

@@ -4,27 +4,40 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	apiv1 "github.com/leonardomonnati2796/distributed-service-registry/pkg/api"
 )
 
 type ServiceStore struct {
-	mu             sync.RWMutex
-	records        map[string]*apiv1.ServiceRecord
-	requestResults map[string]*apiv1.DeregisterServiceResponse
-	onChange       func()
+	mu                       sync.RWMutex
+	records                  map[string]*apiv1.ServiceRecord
+	requestResults           map[string]*apiv1.DeregisterServiceResponse
+	onChange                 func()
+	deletionMarkerTTLSeconds int64
 }
 
 const (
-	tombstoneEndpoint = ""
+	deletionMarkerEndpoint = ""
 )
 
 func NewServiceStore() *ServiceStore {
 	// Crea un nuovo service store.
 	return &ServiceStore{
-		records:        make(map[string]*apiv1.ServiceRecord),
-		requestResults: make(map[string]*apiv1.DeregisterServiceResponse),
+		records:                  make(map[string]*apiv1.ServiceRecord),
+		requestResults:           make(map[string]*apiv1.DeregisterServiceResponse),
+		deletionMarkerTTLSeconds: 180,
 	}
+}
+
+func (s *ServiceStore) SetDeletionMarkerTTL(ttl time.Duration) {
+	seconds := int64(ttl / time.Second)
+	if seconds <= 0 {
+		seconds = 1
+	}
+	s.mu.Lock()
+	s.deletionMarkerTTLSeconds = seconds
+	s.mu.Unlock()
 }
 
 func (s *ServiceStore) SetOnChange(onChange func()) {
@@ -76,8 +89,8 @@ func (s *ServiceStore) ReplaceAll(records []*apiv1.ServiceRecord) {
 		if !ok {
 			continue
 		}
-		if normalized.LogicalVersion == 0 {
-			normalized.LogicalVersion = 1
+		if normalized.LamportClock == 0 {
+			normalized.LamportClock = 1
 		}
 		replaced[recordKey(normalized.GetServiceName())] = normalized
 	}
@@ -99,8 +112,8 @@ func (s *ServiceStore) Upsert(record *apiv1.ServiceRecord) *apiv1.ServiceRecord 
 
 	existing, exists := s.records[key]
 	if !exists {
-		if normalized.LogicalVersion == 0 {
-			normalized.LogicalVersion = 1
+		if normalized.LamportClock == 0 {
+			normalized.LamportClock = 1
 		}
 		s.records[key] = normalized
 		out := cloneRecord(normalized)
@@ -109,8 +122,8 @@ func (s *ServiceStore) Upsert(record *apiv1.ServiceRecord) *apiv1.ServiceRecord 
 		return out
 	}
 
-	if normalized.LogicalVersion <= existing.LogicalVersion {
-		normalized.LogicalVersion = existing.LogicalVersion + 1
+	if normalized.LamportClock <= existing.LamportClock {
+		normalized.LamportClock = existing.LamportClock + 1
 	}
 	s.records[key] = normalized
 	out := cloneRecord(normalized)
@@ -133,15 +146,16 @@ func (s *ServiceStore) Remove(serviceName string, nowUnix int64) bool {
 		s.mu.Unlock()
 		return false
 	}
-	if isTombstone(existing) {
+	if isDeletionMarker(existing) {
 		s.mu.Unlock()
 		return false
 	}
-	tombstone := cloneRecord(existing)
-	tombstone.Endpoint = tombstoneEndpoint
-	tombstone.HealthStatus = apiv1.HealthStatus_HEALTH_STATUS_NOT_SERVING
-	tombstone.LogicalVersion++
-	s.records[key] = tombstone
+	deletionMarker := cloneRecord(existing)
+	deletionMarker.Endpoint = deletionMarkerEndpoint
+	deletionMarker.HealthStatus = apiv1.HealthStatus_HEALTH_STATUS_NOT_SERVING
+	deletionMarker.LamportClock++
+	deletionMarker.DeletionMarkerExpiresAtUnix = nowUnix + s.deletionMarkerTTLSeconds
+	s.records[key] = deletionMarker
 	s.mu.Unlock()
 	s.emitChange()
 	return true
@@ -153,10 +167,17 @@ func (s *ServiceStore) Get(serviceName string) []*apiv1.ServiceRecord {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	record, exists := s.records[recordKey(normalizedName)]
-	if !exists || isTombstone(record) {
+	if !exists || isDeletionMarker(record) {
 		return nil
 	}
 	return []*apiv1.ServiceRecord{cloneRecord(record)}
+}
+
+func (s *ServiceStore) GetForSync(serviceName string) *apiv1.ServiceRecord {
+	key := recordKey(serviceName)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return cloneRecord(s.records[key])
 }
 
 func (s *ServiceStore) List() []*apiv1.ServiceRecord {
@@ -164,7 +185,7 @@ func (s *ServiceStore) List() []*apiv1.ServiceRecord {
 	all := s.ListForSync()
 	out := make([]*apiv1.ServiceRecord, 0, len(all))
 	for _, record := range all {
-		if isTombstone(record) {
+		if isDeletionMarker(record) {
 			continue
 		}
 		out = append(out, record)
@@ -190,6 +211,27 @@ func (s *ServiceStore) ListSince(sinceUnix int64) []*apiv1.ServiceRecord {
 	return s.List()
 }
 
+func (s *ServiceStore) PurgeExpiredDeletionMarkers(nowUnix int64) int {
+	if nowUnix == 0 {
+		nowUnix = time.Now().Unix()
+	}
+
+	s.mu.Lock()
+	removed := 0
+	for key, record := range s.records {
+		if !isDeletionMarker(record) || record.GetDeletionMarkerExpiresAtUnix() <= 0 || record.GetDeletionMarkerExpiresAtUnix() > nowUnix {
+			continue
+		}
+		delete(s.records, key)
+		removed++
+	}
+	s.mu.Unlock()
+	if removed > 0 {
+		s.emitChange()
+	}
+	return removed
+}
+
 func (s *ServiceStore) MergeRemote(records []*apiv1.ServiceRecord) int {
 	// Esegue la logica di merge remote.
 	if len(records) == 0 {
@@ -209,8 +251,8 @@ func (s *ServiceStore) MergeRemote(records []*apiv1.ServiceRecord) int {
 			continue
 		}
 
-		if incoming.LogicalVersion == 0 {
-			incoming.LogicalVersion = 1
+		if incoming.LamportClock == 0 {
+			incoming.LamportClock = 1
 		}
 
 		key := recordKey(incoming.GetServiceName())
@@ -269,11 +311,13 @@ func cloneRecord(record *apiv1.ServiceRecord) *apiv1.ServiceRecord {
 		return nil
 	}
 	return &apiv1.ServiceRecord{
-		ServiceName:    record.GetServiceName(),
-		Endpoint:       record.GetEndpoint(),
-		HealthStatus:   record.GetHealthStatus(),
-		OwnerNodeId:    record.GetOwnerNodeId(),
-		LogicalVersion: record.GetLogicalVersion(),
+		ServiceName:                 record.GetServiceName(),
+		Endpoint:                    record.GetEndpoint(),
+		HealthStatus:                record.GetHealthStatus(),
+		OwnerNodeId:                 record.GetOwnerNodeId(),
+		LamportClock:                record.GetLamportClock(),
+		LamportNodeId:               record.GetLamportNodeId(),
+		DeletionMarkerExpiresAtUnix: record.GetDeletionMarkerExpiresAtUnix(),
 	}
 }
 
@@ -291,8 +335,11 @@ func sortRecords(records []*apiv1.ServiceRecord) {
 
 func shouldReplaceRecord(local, incoming *apiv1.ServiceRecord) bool {
 	// Esegue la logica di should replace record.
-	if incoming.GetLogicalVersion() != local.GetLogicalVersion() {
-		return incoming.GetLogicalVersion() > local.GetLogicalVersion()
+	if incoming.GetLamportClock() != local.GetLamportClock() {
+		return incoming.GetLamportClock() > local.GetLamportClock()
+	}
+	if incoming.GetLamportNodeId() != local.GetLamportNodeId() {
+		return incoming.GetLamportNodeId() > local.GetLamportNodeId()
 	}
 	if incoming.GetHealthStatus() != local.GetHealthStatus() {
 		return incoming.GetHealthStatus() > local.GetHealthStatus()
@@ -306,12 +353,12 @@ func shouldReplaceRecord(local, incoming *apiv1.ServiceRecord) bool {
 	return false
 }
 
-func isTombstone(record *apiv1.ServiceRecord) bool {
+func isDeletionMarker(record *apiv1.ServiceRecord) bool {
 	// Verifica la condizione richiesta.
 	if record == nil {
 		return false
 	}
 	return record.GetHealthStatus() == apiv1.HealthStatus_HEALTH_STATUS_NOT_SERVING &&
-		record.GetEndpoint() == tombstoneEndpoint &&
+		record.GetEndpoint() == deletionMarkerEndpoint &&
 		record.GetEndpoint() == ""
 }

@@ -276,10 +276,10 @@ func isEmptyRegisterRejection(err error) bool {
 }
 
 // Deregister sends a DeregisterService RPC for the given service instance.
-func (c *RegistryClient) Deregister(serviceName string) error {
+func (c *RegistryClient) Deregister(serviceName string) (string, error) {
 	// Deregistra esegue la logica della funzione..
 	if len(c.endpoints) == 0 {
-		return fmt.Errorf("no registry endpoints configured")
+		return "", fmt.Errorf("no registry endpoints configured")
 	}
 
 	requestID := newRequestID()
@@ -288,27 +288,27 @@ func (c *RegistryClient) Deregister(serviceName string) error {
 		var lastErr error
 		for _, idx := range order {
 			addr := c.endpoints[idx]
-			err := c.deregisterOnEndpoint(addr, requestID, serviceName, c.rpcTimeout)
+			message, err := c.deregisterOnEndpoint(addr, requestID, serviceName, c.rpcTimeout)
 			if err == nil {
-				return nil
+				return message, nil
 			}
 			lastErr = err
 			if !isRetryableRegisterError(err) {
-				return err
+				return "", err
 			}
 		}
 
 		if lastErr == nil {
-			return fmt.Errorf("deregister failed without error")
+			return "", fmt.Errorf("deregister failed without error")
 		}
 		if attempt > 1 {
-			return lastErr
+			return "", lastErr
 		}
 		time.Sleep(registerRetryDelay)
 	}
 }
 
-func (c *RegistryClient) deregisterOnEndpoint(address string, requestID string, serviceName string, timeout time.Duration) error {
+func (c *RegistryClient) deregisterOnEndpoint(address string, requestID string, serviceName string, timeout time.Duration) (string, error) {
 	// Deregistra on endpoint.
 	dialCtx, dialCancel := context.WithTimeout(context.Background(), timeout)
 	conn, err := grpc.DialContext( //nolint:staticcheck // consistent with existing codebase
@@ -319,7 +319,7 @@ func (c *RegistryClient) deregisterOnEndpoint(address string, requestID string, 
 	)
 	dialCancel()
 	if err != nil {
-		return fmt.Errorf("dial %s: %w", address, err)
+		return "", fmt.Errorf("dial %s: %w", address, err)
 	}
 	defer conn.Close()
 
@@ -332,12 +332,12 @@ func (c *RegistryClient) deregisterOnEndpoint(address string, requestID string, 
 		ServiceName: serviceName,
 	})
 	if err != nil {
-		return fmt.Errorf("DeregisterService RPC: %w", err)
+		return "", fmt.Errorf("DeregisterService RPC: %w", err)
 	}
 	if !resp.GetAccepted() {
-		return fmt.Errorf("DeregisterService rejected: %s", resp.GetMessage())
+		return "", fmt.Errorf("DeregisterService rejected: %s", resp.GetMessage())
 	}
-	return nil
+	return resp.GetMessage(), nil
 }
 
 // Get returns the registry records for the given service name and optional id.

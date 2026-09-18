@@ -117,7 +117,7 @@ func TestServiceRegistryServerRegisterIdempotentWithRequestID(t *testing.T) {
 	if len(getResp.GetRecords()) != 1 {
 		t.Fatalf("expected one record, got %d", len(getResp.GetRecords()))
 	}
-	if got := getResp.GetRecords()[0].GetLogicalVersion(); got != 1 {
+	if got := getResp.GetRecords()[0].GetLamportClock(); got != 1 {
 		t.Fatalf("expected logical version 1 on duplicate request, got %d", got)
 	}
 }
