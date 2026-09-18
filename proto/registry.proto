@@ -11,7 +11,7 @@ enum HealthStatus {
   HEALTH_STATUS_DEGRADED = 3;
 }
 
-message ServiceRecord {
+message ServiceMessage {
   reserved 8;
 
   string service_name = 1;
@@ -23,7 +23,7 @@ message ServiceRecord {
 }
 
 message RegisterServiceRequest {
-  ServiceRecord record = 1;
+  ServiceMessage record = 1;
 }
 
 message RegisterServiceResponse {
@@ -45,13 +45,13 @@ message GetServiceRequest {
 }
 
 message GetServiceResponse {
-  repeated ServiceRecord records = 1;
+  repeated ServiceMessage records = 1;
 }
 
 message ListServicesRequest {}
 
 message ListServicesResponse {
-  repeated ServiceRecord records = 1;
+  repeated ServiceMessage records = 1;
 }
 
 message NodeInfo {
@@ -66,12 +66,12 @@ message JoinNodeRequest {
 
 message JoinNodeResponse {
   repeated NodeInfo peers = 1;
-  repeated ServiceRecord records = 2;
+  repeated ServiceMessage records = 2;
 }
 
 message GossipUpdRequest {
   string source_node_id = 1;
-  repeated ServiceRecord records = 2;
+  repeated ServiceMessage records = 2;
   repeated NodeInfo peers = 3;
   int64 sent_at_unix = 4;
 }
@@ -87,7 +87,7 @@ message AntyEntropyPullRequest {
 }
 
 message AntyEntropyPullResponse {
-  repeated ServiceRecord records = 1;
+  repeated ServiceMessage records = 1;
   repeated NodeInfo peers = 2;
 }
 
