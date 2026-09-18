@@ -235,18 +235,18 @@ var ServiceRegistry_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	RegistryPeer_JoinCluster_FullMethodName = "/registry.v1.RegistryPeer/JoinCluster"
-	RegistryPeer_GossipSync_FullMethodName  = "/registry.v1.RegistryPeer/GossipSync"
-	RegistryPeer_PullState_FullMethodName   = "/registry.v1.RegistryPeer/PullState"
+	RegistryPeer_JoinNode_FullMethodName        = "/registry.v1.RegistryPeer/JoinNode"
+	RegistryPeer_GossipUpd_FullMethodName       = "/registry.v1.RegistryPeer/GossipUpd"
+	RegistryPeer_AntyEntropyPull_FullMethodName = "/registry.v1.RegistryPeer/AntyEntropyPull"
 )
 
 // RegistryPeerClient is the client API for RegistryPeer service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type RegistryPeerClient interface {
-	JoinCluster(ctx context.Context, in *JoinClusterRequest, opts ...grpc.CallOption) (*JoinClusterResponse, error)
-	GossipSync(ctx context.Context, in *GossipSyncRequest, opts ...grpc.CallOption) (*GossipSyncResponse, error)
-	PullState(ctx context.Context, in *PullStateRequest, opts ...grpc.CallOption) (*PullStateResponse, error)
+	JoinNode(ctx context.Context, in *JoinNodeRequest, opts ...grpc.CallOption) (*JoinNodeResponse, error)
+	GossipUpd(ctx context.Context, in *GossipUpdRequest, opts ...grpc.CallOption) (*GossipUpdResponse, error)
+	AntyEntropyPull(ctx context.Context, in *AntyEntropyPullRequest, opts ...grpc.CallOption) (*AntyEntropyPullResponse, error)
 }
 
 type registryPeerClient struct {
@@ -257,30 +257,30 @@ func NewRegistryPeerClient(cc grpc.ClientConnInterface) RegistryPeerClient {
 	return &registryPeerClient{cc}
 }
 
-func (c *registryPeerClient) JoinCluster(ctx context.Context, in *JoinClusterRequest, opts ...grpc.CallOption) (*JoinClusterResponse, error) {
+func (c *registryPeerClient) JoinNode(ctx context.Context, in *JoinNodeRequest, opts ...grpc.CallOption) (*JoinNodeResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(JoinClusterResponse)
-	err := c.cc.Invoke(ctx, RegistryPeer_JoinCluster_FullMethodName, in, out, cOpts...)
+	out := new(JoinNodeResponse)
+	err := c.cc.Invoke(ctx, RegistryPeer_JoinNode_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *registryPeerClient) GossipSync(ctx context.Context, in *GossipSyncRequest, opts ...grpc.CallOption) (*GossipSyncResponse, error) {
+func (c *registryPeerClient) GossipUpd(ctx context.Context, in *GossipUpdRequest, opts ...grpc.CallOption) (*GossipUpdResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GossipSyncResponse)
-	err := c.cc.Invoke(ctx, RegistryPeer_GossipSync_FullMethodName, in, out, cOpts...)
+	out := new(GossipUpdResponse)
+	err := c.cc.Invoke(ctx, RegistryPeer_GossipUpd_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *registryPeerClient) PullState(ctx context.Context, in *PullStateRequest, opts ...grpc.CallOption) (*PullStateResponse, error) {
+func (c *registryPeerClient) AntyEntropyPull(ctx context.Context, in *AntyEntropyPullRequest, opts ...grpc.CallOption) (*AntyEntropyPullResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(PullStateResponse)
-	err := c.cc.Invoke(ctx, RegistryPeer_PullState_FullMethodName, in, out, cOpts...)
+	out := new(AntyEntropyPullResponse)
+	err := c.cc.Invoke(ctx, RegistryPeer_AntyEntropyPull_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -291,9 +291,9 @@ func (c *registryPeerClient) PullState(ctx context.Context, in *PullStateRequest
 // All implementations must embed UnimplementedRegistryPeerServer
 // for forward compatibility.
 type RegistryPeerServer interface {
-	JoinCluster(context.Context, *JoinClusterRequest) (*JoinClusterResponse, error)
-	GossipSync(context.Context, *GossipSyncRequest) (*GossipSyncResponse, error)
-	PullState(context.Context, *PullStateRequest) (*PullStateResponse, error)
+	JoinNode(context.Context, *JoinNodeRequest) (*JoinNodeResponse, error)
+	GossipUpd(context.Context, *GossipUpdRequest) (*GossipUpdResponse, error)
+	AntyEntropyPull(context.Context, *AntyEntropyPullRequest) (*AntyEntropyPullResponse, error)
 	mustEmbedUnimplementedRegistryPeerServer()
 }
 
@@ -304,14 +304,14 @@ type RegistryPeerServer interface {
 // pointer dereference when methods are called.
 type UnimplementedRegistryPeerServer struct{}
 
-func (UnimplementedRegistryPeerServer) JoinCluster(context.Context, *JoinClusterRequest) (*JoinClusterResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method JoinCluster not implemented")
+func (UnimplementedRegistryPeerServer) JoinNode(context.Context, *JoinNodeRequest) (*JoinNodeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method JoinNode not implemented")
 }
-func (UnimplementedRegistryPeerServer) GossipSync(context.Context, *GossipSyncRequest) (*GossipSyncResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GossipSync not implemented")
+func (UnimplementedRegistryPeerServer) GossipUpd(context.Context, *GossipUpdRequest) (*GossipUpdResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GossipUpd not implemented")
 }
-func (UnimplementedRegistryPeerServer) PullState(context.Context, *PullStateRequest) (*PullStateResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PullState not implemented")
+func (UnimplementedRegistryPeerServer) AntyEntropyPull(context.Context, *AntyEntropyPullRequest) (*AntyEntropyPullResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AntyEntropyPull not implemented")
 }
 func (UnimplementedRegistryPeerServer) mustEmbedUnimplementedRegistryPeerServer() {}
 func (UnimplementedRegistryPeerServer) testEmbeddedByValue()                      {}
@@ -334,56 +334,56 @@ func RegisterRegistryPeerServer(s grpc.ServiceRegistrar, srv RegistryPeerServer)
 	s.RegisterService(&RegistryPeer_ServiceDesc, srv)
 }
 
-func _RegistryPeer_JoinCluster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(JoinClusterRequest)
+func _RegistryPeer_JoinNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(JoinNodeRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RegistryPeerServer).JoinCluster(ctx, in)
+		return srv.(RegistryPeerServer).JoinNode(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: RegistryPeer_JoinCluster_FullMethodName,
+		FullMethod: RegistryPeer_JoinNode_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RegistryPeerServer).JoinCluster(ctx, req.(*JoinClusterRequest))
+		return srv.(RegistryPeerServer).JoinNode(ctx, req.(*JoinNodeRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _RegistryPeer_GossipSync_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GossipSyncRequest)
+func _RegistryPeer_GossipUpd_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GossipUpdRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RegistryPeerServer).GossipSync(ctx, in)
+		return srv.(RegistryPeerServer).GossipUpd(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: RegistryPeer_GossipSync_FullMethodName,
+		FullMethod: RegistryPeer_GossipUpd_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RegistryPeerServer).GossipSync(ctx, req.(*GossipSyncRequest))
+		return srv.(RegistryPeerServer).GossipUpd(ctx, req.(*GossipUpdRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _RegistryPeer_PullState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PullStateRequest)
+func _RegistryPeer_AntyEntropyPull_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AntyEntropyPullRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RegistryPeerServer).PullState(ctx, in)
+		return srv.(RegistryPeerServer).AntyEntropyPull(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: RegistryPeer_PullState_FullMethodName,
+		FullMethod: RegistryPeer_AntyEntropyPull_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RegistryPeerServer).PullState(ctx, req.(*PullStateRequest))
+		return srv.(RegistryPeerServer).AntyEntropyPull(ctx, req.(*AntyEntropyPullRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -396,16 +396,16 @@ var RegistryPeer_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*RegistryPeerServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "JoinCluster",
-			Handler:    _RegistryPeer_JoinCluster_Handler,
+			MethodName: "JoinNode",
+			Handler:    _RegistryPeer_JoinNode_Handler,
 		},
 		{
-			MethodName: "GossipSync",
-			Handler:    _RegistryPeer_GossipSync_Handler,
+			MethodName: "GossipUpd",
+			Handler:    _RegistryPeer_GossipUpd_Handler,
 		},
 		{
-			MethodName: "PullState",
-			Handler:    _RegistryPeer_PullState_Handler,
+			MethodName: "AntyEntropyPull",
+			Handler:    _RegistryPeer_AntyEntropyPull_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

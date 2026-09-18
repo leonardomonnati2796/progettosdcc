@@ -36,7 +36,7 @@ func NewRegistryPeerServer(store *storage.ServiceStore, peerStore *storage.PeerS
 	}
 }
 
-func (s *RegistryPeerServer) JoinCluster(_ context.Context, req *apiv1.JoinClusterRequest) (*apiv1.JoinClusterResponse, error) {
+func (s *RegistryPeerServer) JoinNode(_ context.Context, req *apiv1.JoinNodeRequest) (*apiv1.JoinNodeResponse, error) {
 	// Unisce il nodo al cluster.
 	if req == nil || req.GetNode() == nil {
 		return nil, status.Error(codes.InvalidArgument, "node is required")
@@ -54,14 +54,14 @@ func (s *RegistryPeerServer) JoinCluster(_ context.Context, req *apiv1.JoinClust
 	_ = s.peerStore.Upsert(peer)
 	s.peerStore.UpsertSelf(s.nodeID, s.advertiseAddress, nowUnix)
 
-	response := &apiv1.JoinClusterResponse{
+	response := &apiv1.JoinNodeResponse{
 		Records: s.store.ListForSync(),
 		Peers:   s.peerStore.List(),
 	}
 	return response, nil
 }
 
-func (s *RegistryPeerServer) GossipSync(_ context.Context, req *apiv1.GossipSyncRequest) (*apiv1.GossipSyncResponse, error) {
+func (s *RegistryPeerServer) GossipUpd(_ context.Context, req *apiv1.GossipUpdRequest) (*apiv1.GossipUpdResponse, error) {
 	// Gestisce la propagazione gossip tra i nodi.
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "request is required")
@@ -72,13 +72,13 @@ func (s *RegistryPeerServer) GossipSync(_ context.Context, req *apiv1.GossipSync
 	s.peerStore.MergeRemote(req.GetPeers())
 	s.store.MergeRemote(req.GetRecords())
 
-	return &apiv1.GossipSyncResponse{
+	return &apiv1.GossipUpdResponse{
 		Accepted:       true,
 		ReceivedAtUnix: nowUnix,
 	}, nil
 }
 
-func (s *RegistryPeerServer) LeaveCluster(_ context.Context, req *apiv1.JoinClusterRequest) (*apiv1.GossipSyncResponse, error) {
+func (s *RegistryPeerServer) LeaveCluster(_ context.Context, req *apiv1.JoinNodeRequest) (*apiv1.GossipUpdResponse, error) {
 	// Esegue la logica di leave cluster.
 	if req == nil || req.GetNode() == nil {
 		return nil, status.Error(codes.InvalidArgument, "node is required")
@@ -90,13 +90,13 @@ func (s *RegistryPeerServer) LeaveCluster(_ context.Context, req *apiv1.JoinClus
 	}
 
 	removed := s.peerStore.Remove(nodeID)
-	return &apiv1.GossipSyncResponse{
+	return &apiv1.GossipUpdResponse{
 		Accepted:       removed,
 		ReceivedAtUnix: s.now().Unix(),
 	}, nil
 }
 
-func (s *RegistryPeerServer) PullState(_ context.Context, req *apiv1.PullStateRequest) (*apiv1.PullStateResponse, error) {
+func (s *RegistryPeerServer) AntyEntropyPull(_ context.Context, req *apiv1.AntyEntropyPullRequest) (*apiv1.AntyEntropyPullResponse, error) {
 	// Esegue la logica di pull state.
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "request is required")
@@ -106,7 +106,7 @@ func (s *RegistryPeerServer) PullState(_ context.Context, req *apiv1.PullStateRe
 	nowUnix := s.now().Unix()
 	s.peerStore.UpsertSelf(s.nodeID, s.advertiseAddress, nowUnix)
 
-	return &apiv1.PullStateResponse{
+	return &apiv1.AntyEntropyPullResponse{
 		Records: s.store.ListSince(sinceUnix),
 		Peers:   s.peerStore.ListSince(sinceUnix),
 	}, nil

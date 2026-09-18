@@ -60,33 +60,33 @@ message NodeInfo {
   int64 updated_at_unix = 3;
 }
 
-message JoinClusterRequest {
+message JoinNodeRequest {
   NodeInfo node = 1;
 }
 
-message JoinClusterResponse {
+message JoinNodeResponse {
   repeated NodeInfo peers = 1;
   repeated ServiceRecord records = 2;
 }
 
-message GossipSyncRequest {
+message GossipUpdRequest {
   string source_node_id = 1;
   repeated ServiceRecord records = 2;
   repeated NodeInfo peers = 3;
   int64 sent_at_unix = 4;
 }
 
-message GossipSyncResponse {
+message GossipUpdResponse {
   bool accepted = 1;
   int64 received_at_unix = 2;
 }
 
-message PullStateRequest {
+message AntyEntropyPullRequest {
   string source_node_id = 1;
   int64 since_unix = 2;
 }
 
-message PullStateResponse {
+message AntyEntropyPullResponse {
   repeated ServiceRecord records = 1;
   repeated NodeInfo peers = 2;
 }
@@ -99,8 +99,8 @@ service ServiceRegistry {
 }
 
 service RegistryPeer {
-  rpc JoinCluster(JoinClusterRequest) returns (JoinClusterResponse);
-  rpc GossipSync(GossipSyncRequest) returns (GossipSyncResponse);
-  rpc PullState(PullStateRequest) returns (PullStateResponse);
+  rpc JoinNode(JoinNodeRequest) returns (JoinNodeResponse);
+  rpc GossipUpd(GossipUpdRequest) returns (GossipUpdResponse);
+  rpc AntyEntropyPull(AntyEntropyPullRequest) returns (AntyEntropyPullResponse);
 }
 

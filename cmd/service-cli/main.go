@@ -50,7 +50,7 @@ func printUsage() {
 	// Stampa il contenuto richiesto.
 	fmt.Fprintf(os.Stderr, "service-cli <command> [flags]\n")
 	fmt.Fprintf(os.Stderr, "commands: register, deregister, list, get\n")
-	fmt.Fprintf(os.Stderr, "common flag: -targets localhost:50051,localhost:50052\n")
+	fmt.Fprintf(os.Stderr, "common flag: -targets localhost:10001,localhost:10002\n")
 }
 
 func newClient(targets string) *client.RegistryClient {
@@ -69,7 +69,7 @@ func newClient(targets string) *client.RegistryClient {
 func runRegister(args []string) {
 	// Esegue il comando richiesto.
 	fs := flag.NewFlagSet("register", flag.ExitOnError)
-	targets := fs.String("targets", "localhost:50051", "comma-separated registry endpoints")
+	targets := fs.String("targets", "localhost:10001", "comma-separated registry endpoints")
 	serviceName := fs.String("name", "", "service name")
 	endpoint := fs.String("endpoint", "", "service endpoint")
 	health := fs.String("health", "HEALTH_STATUS_SERVING", "health status")
@@ -101,7 +101,7 @@ func runRegister(args []string) {
 func runDeregister(args []string) {
 	// Esegue il comando richiesto.
 	fs := flag.NewFlagSet("deregister", flag.ExitOnError)
-	targets := fs.String("targets", "localhost:50051", "comma-separated registry endpoints")
+	targets := fs.String("targets", "localhost:10001", "comma-separated registry endpoints")
 	serviceName := fs.String("name", "", "service name")
 	fs.Parse(args)
 
@@ -122,7 +122,7 @@ func runDeregister(args []string) {
 func runList(args []string) {
 	// Esegue il comando richiesto.
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
-	targets := fs.String("targets", "localhost:50051", "comma-separated registry endpoints")
+	targets := fs.String("targets", "localhost:10001", "comma-separated registry endpoints")
 	fs.Parse(args)
 
 	nodeTarget := primaryTarget(*targets)
@@ -144,7 +144,7 @@ func runList(args []string) {
 func runGet(args []string) {
 	// Esegue il comando richiesto.
 	fs := flag.NewFlagSet("get", flag.ExitOnError)
-	targets := fs.String("targets", "localhost:50051", "comma-separated registry endpoints")
+	targets := fs.String("targets", "localhost:10001", "comma-separated registry endpoints")
 	serviceName := fs.String("name", "", "service name")
 	fs.Parse(args)
 

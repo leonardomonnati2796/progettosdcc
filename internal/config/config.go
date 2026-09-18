@@ -24,9 +24,8 @@ type RegistryClusterConfig struct {
 	SeedPeers                []string `yaml:"seed_peers"`
 	GossipIntervalSeconds    int      `yaml:"gossip_interval_seconds"`
 	GossipStartDelaySeconds  int      `yaml:"gossip_start_delay_seconds"`
-	GossipGatePath           string   `yaml:"gossip_gate_path"`
 	ReconcileIntervalSeconds int      `yaml:"reconcile_interval_seconds"`
-	PeerTimeoutSeconds       int      `yaml:"peer_timeout_seconds"`
+	PeerTimeoutSeconds       int      `yaml:"peer_timeout_"`
 	MaxGossipFanout          int      `yaml:"max_gossip_fanout"`
 }
 
@@ -92,7 +91,7 @@ func (c *RegistryConfig) Validate() error {
 		return errors.New("cluster.reconcile_interval_seconds must be > 0")
 	}
 	if c.Cluster.PeerTimeoutSeconds <= 0 {
-		return errors.New("cluster.peer_timeout_seconds must be > 0")
+		return errors.New("cluster.peer_timeout_ must be > 0")
 	}
 	if c.Cluster.MaxGossipFanout <= 0 {
 		return errors.New("cluster.max_gossip_fanout must be > 0")

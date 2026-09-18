@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -26,7 +25,6 @@ type Runtime struct {
 
 	gossipInterval    time.Duration
 	startDelay        time.Duration
-	gossipGatePath    string
 	reconcileInterval time.Duration
 	peerTimeout       time.Duration
 	maxGossipFanout   int
@@ -57,8 +55,6 @@ func NewRuntime(cfg *config.RegistryConfig, serviceStore *storage.ServiceStore, 
 	if startDelay < 0 {
 		startDelay = 0
 	}
-	gossipGatePath := strings.TrimSpace(cfg.Cluster.GossipGatePath)
-
 	reconcileInterval := time.Duration(cfg.Cluster.ReconcileIntervalSeconds) * time.Second
 	if reconcileInterval <= 0 {
 		reconcileInterval = 15 * time.Second
@@ -80,7 +76,6 @@ func NewRuntime(cfg *config.RegistryConfig, serviceStore *storage.ServiceStore, 
 		seedPeers:         append([]string(nil), cfg.Cluster.SeedPeers...),
 		gossipInterval:    gossipInterval,
 		startDelay:        startDelay,
-		gossipGatePath:    gossipGatePath,
 		reconcileInterval: reconcileInterval,
 		peerTimeout:       peerTimeout,
 		maxGossipFanout:   maxFanout,
@@ -118,9 +113,6 @@ func (r *Runtime) bootstrapLoop() {
 	// Esegue il bootstrap iniziale del sistema.
 	defer r.wg.Done()
 
-	if !r.waitForGossipGate() {
-		return
-	}
 	if !r.waitForStartDelay() {
 		return
 	}
@@ -143,9 +135,6 @@ func (r *Runtime) gossipLoop() {
 	// Gestisce la propagazione gossip tra i nodi.
 	defer r.wg.Done()
 
-	if !r.waitForGossipGate() {
-		return
-	}
 	if !r.waitForStartDelay() {
 		return
 	}
@@ -167,9 +156,6 @@ func (r *Runtime) reconcileLoop() {
 	// Riconcilia lo stato tra i nodi.
 	defer r.wg.Done()
 
-	if !r.waitForGossipGate() {
-		return
-	}
 	if !r.waitForStartDelay() {
 		return
 	}
@@ -191,9 +177,6 @@ func (r *Runtime) peerSweepLoop() {
 	// Esegue la logica di peer sweep loop.
 	defer r.wg.Done()
 
-	if !r.waitForGossipGate() {
-		return
-	}
 	if !r.waitForStartDelay() {
 		return
 	}
@@ -237,7 +220,7 @@ func (r *Runtime) bootstrapFromSeeds() {
 func (r *Runtime) joinPeer(address string) error {
 	// Unisce il nodo al cluster.
 	nowUnix := time.Now().Unix()
-	request := &apiv1.JoinClusterRequest{
+	request := &apiv1.JoinNodeRequest{
 		Node: &apiv1.NodeInfo{
 			NodeId:        r.nodeID,
 			GrpcAddress:   r.advertiseAddress,
@@ -246,7 +229,7 @@ func (r *Runtime) joinPeer(address string) error {
 	}
 
 	return r.withPeerClient(address, func(ctx context.Context, client apiv1.RegistryPeerClient) error {
-		response, err := client.JoinCluster(ctx, request)
+		response, err := client.JoinNode(ctx, request)
 		if err != nil {
 			return err
 		}
@@ -254,30 +237,6 @@ func (r *Runtime) joinPeer(address string) error {
 		r.serviceStore.MergeRemote(response.GetRecords())
 		return nil
 	})
-}
-
-func (r *Runtime) waitForGossipGate() bool {
-	// Attende il completamento della condizione richiesta.
-	if r.gossipGatePath == "" {
-		return true
-	}
-
-	ticker := time.NewTicker(250 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		if _, err := os.Stat(r.gossipGatePath); err == nil {
-			return true
-		} else if !os.IsNotExist(err) {
-			log.Printf("gossip gate check failed for %s: %v", r.gossipGatePath, err)
-		}
-
-		select {
-		case <-r.stopCh:
-			return false
-		case <-ticker.C:
-		}
-	}
 }
 
 func (r *Runtime) waitForStartDelay() bool {
@@ -311,7 +270,7 @@ func (r *Runtime) runGossipRound() {
 	peers := r.peerStore.List()
 	nowUnix := time.Now().Unix()
 
-	request := &apiv1.GossipSyncRequest{
+	request := &apiv1.GossipUpdRequest{
 		SourceNodeId: r.nodeID,
 		Records:      records,
 		Peers:        peers,
@@ -354,7 +313,7 @@ func (r *Runtime) runReconcileRound() {
 
 func (r *Runtime) GracefulLeave() {
 	// Esegue la logica di graceful leave.
-	request := &apiv1.JoinClusterRequest{
+	request := &apiv1.JoinNodeRequest{
 		Node: &apiv1.NodeInfo{
 			NodeId:        r.nodeID,
 			GrpcAddress:   r.advertiseAddress,
@@ -402,7 +361,7 @@ func (r *Runtime) leaveTargets() []string {
 	return targets
 }
 
-func (r *Runtime) leaveCluster(address string, request *apiv1.JoinClusterRequest) error {
+func (r *Runtime) leaveCluster(address string, request *apiv1.JoinNodeRequest) error {
 	// Esegue la logica di leave cluster.
 	dialCtx, dialCancel := context.WithTimeout(context.Background(), r.dialTimeout)
 	conn, err := grpc.DialContext(dialCtx, address, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
@@ -419,7 +378,7 @@ func (r *Runtime) leaveCluster(address string, request *apiv1.JoinClusterRequest
 	callCtx, callCancel := context.WithTimeout(context.Background(), r.dialTimeout)
 	defer callCancel()
 
-	response := new(apiv1.GossipSyncResponse)
+	response := new(apiv1.GossipUpdResponse)
 	if err := conn.Invoke(callCtx, registry.RegistryPeerControl_LeaveCluster_FullMethodName, request, response); err != nil {
 		return err
 	}
@@ -429,10 +388,10 @@ func (r *Runtime) leaveCluster(address string, request *apiv1.JoinClusterRequest
 	return nil
 }
 
-func (r *Runtime) sendGossip(address string, request *apiv1.GossipSyncRequest) error {
+func (r *Runtime) sendGossip(address string, request *apiv1.GossipUpdRequest) error {
 	// Esegue la logica di send gossip.
 	return r.withPeerClient(address, func(ctx context.Context, client apiv1.RegistryPeerClient) error {
-		_, err := client.GossipSync(ctx, request)
+		_, err := client.GossipUpd(ctx, request)
 		return err
 	})
 }
@@ -440,7 +399,7 @@ func (r *Runtime) sendGossip(address string, request *apiv1.GossipSyncRequest) e
 func (r *Runtime) pullState(address string, sinceUnix int64) error {
 	// Esegue la logica di pull state.
 	return r.withPeerClient(address, func(ctx context.Context, client apiv1.RegistryPeerClient) error {
-		response, err := client.PullState(ctx, &apiv1.PullStateRequest{
+		response, err := client.AntyEntropyPull(ctx, &apiv1.AntyEntropyPullRequest{
 			SourceNodeId: r.nodeID,
 			SinceUnix:    sinceUnix,
 		})

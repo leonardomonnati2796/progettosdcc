@@ -1,18 +1,18 @@
 # Profilo locale di riferimento. Per Docker usare node-1.yaml, node-2.yaml o node-3.yaml.
 node:
   id: registry-node-1
-  listen_address: 0.0.0.0:50051
-  advertise_address: registry-node-1:50051
+  listen_address: 0.0.0.0:10001
+  advertise_address: registry-node-1:10001
 
 cluster:
   # Gli indirizzi dei peer devono essere raggiungibili dalla rete del registry.
   seed_peers:
-    - registry-node-1:50051
-    - registry-node-2:50051
-    - registry-node-3:50051
+    - registry-node-1:10001
+    - registry-node-2:10001
+    - registry-node-3:10001
   gossip_interval_seconds: 3
   gossip_start_delay_seconds: 0
   reconcile_interval_seconds: 15
-  peer_timeout_seconds: 10
+  peer_timeout_: 10
   max_gossip_fanout: 2
 

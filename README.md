@@ -100,7 +100,7 @@ Se Docker segnala un errore di permessi su `/var/run/docker.sock`, chiudere la s
 exit
 ```
 
-Per permettere connessioni esterne, configurare nel Security Group AWS solo le porte necessarie (`22` per SSH e, se richiesto, `50051`--`50055` per gRPC). Per l'uso ordinario e preferibile non esporre pubblicamente le porte gRPC.
+Per permettere connessioni esterne, configurare nel Security Group AWS solo le porte necessarie (`22` per SSH e, se richiesto, `10001`--`10005` per gRPC). Per l'uso ordinario e preferibile non esporre pubblicamente le porte gRPC.
 
 ## Comandi operativi
 

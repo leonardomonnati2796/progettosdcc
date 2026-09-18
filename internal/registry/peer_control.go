@@ -11,7 +11,7 @@ import (
 const RegistryPeerControl_LeaveCluster_FullMethodName = "/registry.v1.RegistryPeerControl/LeaveCluster"
 
 type RegistryPeerControlServer interface {
-	LeaveCluster(context.Context, *apiv1.JoinClusterRequest) (*apiv1.GossipSyncResponse, error)
+	LeaveCluster(context.Context, *apiv1.JoinNodeRequest) (*apiv1.GossipUpdResponse, error)
 }
 
 func RegisterRegistryPeerControlServer(s grpc.ServiceRegistrar, srv RegistryPeerControlServer) {
@@ -21,7 +21,7 @@ func RegisterRegistryPeerControlServer(s grpc.ServiceRegistrar, srv RegistryPeer
 
 func _RegistryPeerControl_LeaveCluster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, _ grpc.UnaryServerInterceptor) (interface{}, error) {
 	// Esegue la logica di registry peer control leave cluster handler.
-	in := new(apiv1.JoinClusterRequest)
+	in := new(apiv1.JoinNodeRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}

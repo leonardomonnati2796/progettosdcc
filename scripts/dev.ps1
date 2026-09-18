@@ -9,7 +9,7 @@ param(
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 $ComposeFile = Join-Path $Root "deploy/docker-compose.yml"
-$Targets = "registry-node-1:50051,registry-node-2:50051,registry-node-3:50051,registry-node-4:50051,registry-node-5:50051"
+$Targets = "registry-node-1:10001,registry-node-2:10001,registry-node-3:10001,registry-node-4:10001,registry-node-5:10001"
 $StateFile = Join-Path $Root ".trace-up.state"
 $ServiceStateFile = Join-Path $Root ".trace-service.state"
 $CrashStateFile = Join-Path $Root ".trace-crash.state"
@@ -66,8 +66,8 @@ function Get-CrashNodes {
 
 function Show-ClusterServices {
     foreach ($node in Get-RegistryNodes) {
-        Write-Host "--- $node`:50051 ---"
-        Invoke-Cli @("list", "-targets", "$node`:50051")
+        Write-Host "--- $node`:10001 ---"
+        Invoke-Cli @("list", "-targets", "$node`:10001")
     }
 }
 
@@ -150,7 +150,7 @@ Scripts list:
     }
     "verify-resilience" {
         $crashedNodes = @(Get-CrashNodes)
-        $activeTargets = Get-RegistryNodes | Where-Object { $_ -notin $crashedNodes } | ForEach-Object { "$_`:50051" }
+        $activeTargets = Get-RegistryNodes | Where-Object { $_ -notin $crashedNodes } | ForEach-Object { "$_`:10001" }
         Invoke-Cli @("list", "-targets", ($activeTargets -join ","))
     }
     "discovery" {

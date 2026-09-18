@@ -1,20 +1,20 @@
 # Registry node 2: secondo nodo del cluster Docker.
 node:
   id: registry-node-2
-  listen_address: 0.0.0.0:50051
-  advertise_address: registry-node-2:50051
+  listen_address: 0.0.0.0:10001
+  advertise_address: registry-node-2:10001
 
 cluster:
   # Tutti i nodi condividono lo stesso elenco di peer iniziali.
   seed_peers:
-    - registry-node-1:50051
-    - registry-node-2:50051
-    - registry-node-3:50051
-    - registry-node-4:50051
-    - registry-node-5:50051
+    - registry-node-1:10001
+    - registry-node-2:10001
+    - registry-node-3:10001
+    - registry-node-4:10001
+    - registry-node-5:10001
   gossip_interval_seconds: 2
   gossip_start_delay_seconds: 0
   reconcile_interval_seconds: 5
-  peer_timeout_seconds: 8
+  peer_timeout_: 8
   max_gossip_fanout: 2
 

@@ -6,7 +6,7 @@ services:
     container_name: registry-node-1
     command: ["-config", "/app/config/registry/node-1.yaml"]
     ports:
-      - "50051:50051"
+      - "10001:10001"
     networks:
       - registry-net
 
@@ -17,7 +17,7 @@ services:
     container_name: registry-node-2
     command: ["-config", "/app/config/registry/node-2.yaml"]
     ports:
-      - "50052:50051"
+      - "10002:10001"
     networks:
       - registry-net
 
@@ -28,7 +28,7 @@ services:
     container_name: registry-node-3
     command: ["-config", "/app/config/registry/node-3.yaml"]
     ports:
-      - "50053:50051"
+      - "10003:10001"
     networks:
       - registry-net
 
@@ -39,7 +39,7 @@ services:
     container_name: registry-node-4
     command: ["-config", "/app/config/registry/node-4.yaml"]
     ports:
-      - "50054:50051"
+      - "10004:10001"
     networks:
       - registry-net
 
@@ -50,7 +50,7 @@ services:
     container_name: registry-node-5
     command: ["-config", "/app/config/registry/node-5.yaml"]
     ports:
-      - "50055:50051"
+      - "10005:10001"
     networks:
       - registry-net
 

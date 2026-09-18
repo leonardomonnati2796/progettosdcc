@@ -15,7 +15,7 @@ func TestRegistryPeerServerJoinAndGossipMerge(t *testing.T) {
 	peerStore := storage.NewPeerStore()
 	server := registry.NewRegistryPeerServer(serviceStore, peerStore, "node-a", "node-a:50051")
 
-	joinResp, err := server.JoinCluster(context.Background(), &apiv1.JoinClusterRequest{
+	joinResp, err := server.JoinNode(context.Background(), &apiv1.JoinNodeRequest{
 		Node: &apiv1.NodeInfo{NodeId: "node-b", GrpcAddress: "node-b:50051"},
 	})
 	if err != nil {
@@ -25,7 +25,7 @@ func TestRegistryPeerServerJoinAndGossipMerge(t *testing.T) {
 		t.Fatalf("expected 2 peers after join, got %d", len(joinResp.GetPeers()))
 	}
 
-	gossipResp, err := server.GossipSync(context.Background(), &apiv1.GossipSyncRequest{
+	gossipResp, err := server.GossipUpd(context.Background(), &apiv1.GossipUpdRequest{
 		SourceNodeId: "node-b",
 		Records: []*apiv1.ServiceRecord{
 			{
@@ -47,7 +47,7 @@ func TestRegistryPeerServerJoinAndGossipMerge(t *testing.T) {
 		t.Fatalf("expected gossip accepted=true")
 	}
 
-	pullResp, err := server.PullState(context.Background(), &apiv1.PullStateRequest{SourceNodeId: "node-b", SinceUnix: 0})
+	pullResp, err := server.AntyEntropyPull(context.Background(), &apiv1.AntyEntropyPullRequest{SourceNodeId: "node-b", SinceUnix: 0})
 	if err != nil {
 		t.Fatalf("pull state returned error: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestRegistryPeerServerLeaveCluster(t *testing.T) {
 	peerStore.UpsertSelf("node-a", "node-a:50051", 200)
 	peerStore.Upsert(&apiv1.NodeInfo{NodeId: "node-b", GrpcAddress: "node-b:50051", UpdatedAtUnix: 200})
 
-	resp, err := server.LeaveCluster(context.Background(), &apiv1.JoinClusterRequest{
+	resp, err := server.LeaveCluster(context.Background(), &apiv1.JoinNodeRequest{
 		Node: &apiv1.NodeInfo{NodeId: "node-b", GrpcAddress: "node-b:50051", UpdatedAtUnix: 201},
 	})
 	if err != nil {
