@@ -32,7 +32,6 @@ func TestRegistryPeerServerJoinAndGossipMerge(t *testing.T) {
 				ServiceName:  "users",
 				Endpoint:     "users-1:8080",
 				HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
-				OwnerNodeId:  "node-b",
 				LamportClock: 1,
 			},
 		},

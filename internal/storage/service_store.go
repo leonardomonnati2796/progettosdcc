@@ -301,7 +301,6 @@ func normalizeRecord(record *apiv1.ServiceRecord) (*apiv1.ServiceRecord, bool) {
 		return nil, false
 	}
 	normalized.Endpoint = strings.TrimSpace(normalized.GetEndpoint())
-	normalized.OwnerNodeId = strings.TrimSpace(normalized.GetOwnerNodeId())
 	return normalized, true
 }
 
@@ -314,7 +313,6 @@ func cloneRecord(record *apiv1.ServiceRecord) *apiv1.ServiceRecord {
 		ServiceName:                 record.GetServiceName(),
 		Endpoint:                    record.GetEndpoint(),
 		HealthStatus:                record.GetHealthStatus(),
-		OwnerNodeId:                 record.GetOwnerNodeId(),
 		LamportClock:                record.GetLamportClock(),
 		LamportNodeId:               record.GetLamportNodeId(),
 		DeletionMarkerExpiresAtUnix: record.GetDeletionMarkerExpiresAtUnix(),
@@ -343,9 +341,6 @@ func shouldReplaceRecord(local, incoming *apiv1.ServiceRecord) bool {
 	}
 	if incoming.GetHealthStatus() != local.GetHealthStatus() {
 		return incoming.GetHealthStatus() > local.GetHealthStatus()
-	}
-	if incoming.GetOwnerNodeId() != local.GetOwnerNodeId() {
-		return incoming.GetOwnerNodeId() > local.GetOwnerNodeId()
 	}
 	if incoming.GetEndpoint() != local.GetEndpoint() {
 		return incoming.GetEndpoint() > local.GetEndpoint()

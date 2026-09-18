@@ -15,7 +15,6 @@ type Service struct {
 	Name          string
 	Endpoint      string
 	Health        HealthStatus
-	OwnerNode     string
 	LamportClock  uint64
 	LamportNodeID string
 }
@@ -31,7 +30,6 @@ func (service Service) IsDeletionMarker() bool {
 func NormalizeService(service Service) (Service, bool) {
 	service.Name = strings.TrimSpace(service.Name)
 	service.Endpoint = strings.TrimSpace(service.Endpoint)
-	service.OwnerNode = strings.TrimSpace(service.OwnerNode)
 	if service.Name == "" || service.Endpoint == "" {
 		return Service{}, false
 	}

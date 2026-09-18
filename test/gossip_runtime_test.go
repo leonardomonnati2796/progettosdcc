@@ -44,7 +44,6 @@ func TestRuntimeBootstrapGossipAndReconcile(t *testing.T) {
 		ServiceName:  "remote-users",
 		Endpoint:     "remote-users:8080",
 		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
-		OwnerNodeId:  "node-remote",
 		LamportClock: 1,
 	})
 
@@ -83,7 +82,6 @@ func TestRuntimeBootstrapGossipAndReconcile(t *testing.T) {
 		ServiceName:  "local-orders",
 		Endpoint:     "local-orders:8080",
 		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
-		OwnerNodeId:  "node-local",
 		LamportClock: 1,
 	})
 
@@ -98,7 +96,6 @@ func TestRuntimeBootstrapGossipAndReconcile(t *testing.T) {
 		ServiceName:  "remote-payments",
 		Endpoint:     "remote-payments:8080",
 		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
-		OwnerNodeId:  "node-remote",
 		LamportClock: 1,
 	})
 

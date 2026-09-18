@@ -12,10 +12,11 @@ enum HealthStatus {
 }
 
 message ServiceRecord {
+  reserved 8;
+
   string service_name = 1;
   string endpoint = 3;
   HealthStatus health_status = 5;
-  string owner_node_id = 8;
   uint64 lamport_clock = 9;
   int64 deletion_marker_expires_at_unix = 10;
   string lamport_node_id = 11;

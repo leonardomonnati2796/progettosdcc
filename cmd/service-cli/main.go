@@ -18,7 +18,6 @@ import (
 type outputServiceRecord struct {
 	ServiceName   string `json:"service_name,omitempty"`
 	Endpoint      string `json:"endpoint,omitempty"`
-	OwnerNodeId   string `json:"owner_node_id,omitempty"`
 	LamportClock  uint64 `json:"lamport_clock,omitempty"`
 	LamportNodeID string `json:"lamport_node_id,omitempty"`
 }
@@ -169,7 +168,6 @@ func toOutputServiceRecords(records []*apiv1.ServiceRecord) []outputServiceRecor
 		out = append(out, outputServiceRecord{
 			ServiceName:   record.GetServiceName(),
 			Endpoint:      record.GetEndpoint(),
-			OwnerNodeId:   record.GetOwnerNodeId(),
 			LamportClock:  record.GetLamportClock(),
 			LamportNodeID: record.GetLamportNodeId(),
 		})

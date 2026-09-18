@@ -8,64 +8,165 @@ Registro servizi distribuito in Go con replica gossip tra nodi registry, eseguib
 - Docker Desktop attivo per il cluster
 - PowerShell 5+ (Windows) oppure Bash (Linux/macOS)
 
-## Comandi rapidi
+## Installazione su Amazon EC2
 
-Il runner `scripts/dev.ps1` raccoglie i comandi più usati senza dipendere da strumenti di build aggiuntivi:
+Su un'istanza EC2 con Amazon Linux, installare Docker, Go e gli strumenti necessari:
 
-```powershell
-.\scripts\dev.ps1 help
-.\scripts\dev.ps1 build
-.\scripts\dev.ps1 test
-.\scripts\dev.ps1 up
-.\scripts\dev.ps1 status
-.\scripts\dev.ps1 list
-.\scripts\dev.ps1 crash
-.\scripts\dev.ps1 crash -count 2
-.\scripts\dev.ps1 crash -count 3
-.\scripts\dev.ps1 select-service -profile billing -endpoint 203.0.113.21:8080
-.\scripts\dev.ps1 verify-resilience
-.\scripts\dev.ps1 recover
-.\scripts\dev.ps1 cli register -targets registry-node-1:50051 -name identity-api -endpoint 203.0.113.10:8080
-.\scripts\dev.ps1 down
+```bash
+sudo dnf update -y
+sudo dnf install -y docker golang curl
+sudo systemctl enable --now docker
+sudo usermod -aG docker ec2-user
+newgrp docker
 ```
 
-## Scenario completo
+Su Amazon Linux 2, se `dnf` non e disponibile, usare:
 
-Avvio cluster registry:
-
-```powershell
-.\scripts\dev.ps1 up
+```bash
+sudo yum update -y
+sudo amazon-linux-extras install docker
+sudo yum install -y golang curl
+sudo systemctl enable --now docker
 ```
 
-Esecuzione completa dello scenario richiesto dalla traccia:
+Verificare Docker, Compose e Go:
 
-```powershell
-.\scripts\dev.ps1 trace
+```bash
+docker ps
+docker compose version
+go version
 ```
 
-Lo scenario `trace` usa un servizio casuale e gestisce automaticamente registrazione, gossip, fault injection su due nodi scelti casualmente, recovery e deregistrazione in un cluster di cinque nodi.
+Se Docker Compose non e disponibile, installare il plugin per l'utente corrente:
 
-`crash` senza `-count` arresta un nodo scelto casualmente. Con `-count N` arresta `N` nodi scelti casualmente; il limite e `N-2`, per mantenere almeno due nodi attivi.
-
-Per simulare un aggiornamento dello stesso servizio e incrementare il Lamport clock, seleziona lo stesso profilo con un endpoint diverso e riesegui `register`.
-
-I quattro profili disponibili sono `identity-api`, `billing-api`, `payments-api` e `catalog-api`.
-
-Pulizia finale:
-
-```powershell
-.\scripts\dev.ps1 down
+```bash
+mkdir -p ~/.docker/cli-plugins
+curl -fL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 \
+	-o ~/.docker/cli-plugins/docker-compose
+chmod +x ~/.docker/cli-plugins/docker-compose
+docker compose version
 ```
 
-## Cosa copre `dev.ps1 trace`
+Il progetto usa Docker Buildx per la build delle immagini. Installare una versione aggiornata:
 
-1. Avvio dei 5 nodi registry
-2. Registrazione di un servizio di test
-3. Verifica convergenza su tutti i nodi
-4. Crash simultaneo di due nodi registry
-5. Verifica resilienza dei tre nodi rimanenti
-6. Recovery dei nodi crashati
-7. Deregistrazione del servizio e verifica stato finale
+```bash
+BUILDX_VERSION=$(curl -fsSL https://api.github.com/repos/docker/buildx/releases/latest \
+	| grep '"tag_name"' \
+	| sed -E 's/.*"([^"]+)".*/\1/')
+
+sudo mkdir -p /usr/local/lib/docker/cli-plugins
+sudo curl -fL \
+	"https://github.com/docker/buildx/releases/download/${BUILDX_VERSION}/buildx-${BUILDX_VERSION}.linux-amd64" \
+	-o /usr/local/lib/docker/cli-plugins/docker-buildx
+sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx
+docker buildx version
+```
+
+Per eseguire lo script PowerShell su Amazon Linux, installare ICU e PowerShell:
+
+```bash
+sudo dnf install -y libicu
+
+cd /tmp
+VERSION=7.5.3
+curl -fLO https://github.com/PowerShell/PowerShell/releases/download/v${VERSION}/powershell-${VERSION}-linux-x64.tar.gz
+sudo mkdir -p /opt/microsoft/powershell/7
+sudo tar -xzf powershell-${VERSION}-linux-x64.tar.gz -C /opt/microsoft/powershell/7
+sudo chmod +x /opt/microsoft/powershell/7/pwsh
+sudo ln -sf /opt/microsoft/powershell/7/pwsh /usr/local/bin/pwsh
+pwsh --version
+```
+
+Clonare o copiare il progetto nella directory prevista e verificare lo script:
+
+```bash
+cd /home/ec2-user/progettosdcc
+ls -l scripts/dev.ps1
+pwsh -File ./scripts/dev.ps1 help
+```
+
+Avviare quindi il cluster a cinque nodi:
+
+```bash
+pwsh -File ./scripts/dev.ps1 trace-up
+pwsh -File ./scripts/dev.ps1 select-service -profile random
+pwsh -File ./scripts/dev.ps1 register
+pwsh -File ./scripts/dev.ps1 list
+```
+
+Se Docker segnala un errore di permessi su `/var/run/docker.sock`, chiudere la sessione SSH e accedere nuovamente dopo l'aggiunta dell'utente al gruppo `docker`:
+
+```bash
+exit
+```
+
+Per permettere connessioni esterne, configurare nel Security Group AWS solo le porte necessarie (`22` per SSH e, se richiesto, `50051`--`50055` per gRPC). Per l'uso ordinario e preferibile non esporre pubblicamente le porte gRPC.
+
+## Comandi operativi
+
+Eseguire i comandi dalla directory principale del progetto. Su EC2 Linux usare
+`pwsh -File`; su Windows è possibile usare direttamente
+`./scripts/dev.ps1`.
+
+```bash
+cd /home/ec2-user/progettosdcc
+pwsh -File ./scripts/dev.ps1 help
+pwsh -File ./scripts/dev.ps1 trace-up
+```
+
+Selezionare e registrare un servizio:
+
+```bash
+pwsh -File ./scripts/dev.ps1 select-service -profile random
+pwsh -File ./scripts/dev.ps1 register
+pwsh -File ./scripts/dev.ps1 list
+```
+
+La registrazione viene propagata automaticamente ai cinque nodi tramite gossip.
+Per aggiornare il Lamport clock dello stesso servizio, selezionare un endpoint
+diverso e registrare nuovamente:
+
+```bash
+pwsh -File ./scripts/dev.ps1 select-service -profile billing -endpoint 203.0.113.21:8080
+pwsh -File ./scripts/dev.ps1 register
+```
+
+Eseguire una discovery:
+
+```bash
+pwsh -File ./scripts/dev.ps1 discovery -name billing-api
+```
+
+Simulare un crash e verificare la resilienza:
+
+```bash
+pwsh -File ./scripts/dev.ps1 crash
+pwsh -File ./scripts/dev.ps1 verify-resilience
+pwsh -File ./scripts/dev.ps1 recover
+```
+
+Il comando `crash` senza `-count` arresta un nodo casuale. Con `-count N` è
+possibile arrestare più nodi casuali, fino a `N-2`, lasciando almeno due nodi
+attivi:
+
+```bash
+pwsh -File ./scripts/dev.ps1 crash -count 2
+pwsh -File ./scripts/dev.ps1 crash -count 3
+```
+
+Deregistrare un servizio e visualizzare il Lamport clock del deletion marker:
+
+```bash
+pwsh -File ./scripts/dev.ps1 deregister
+```
+
+Il comando chiede interattivamente il nome del servizio.
+
+Infine, arrestare e rimuovere l'ambiente Docker:
+
+```bash
+pwsh -File ./scripts/dev.ps1 down
+```
 
 ## Layout
 
@@ -74,37 +175,5 @@ Pulizia finale:
 - `pkg/api/`: codice Go generato dal contratto gRPC
 - `proto/`: contratti protobuf
 - `deploy/`: Dockerfile e Compose
-- `config/registry/`: configurazioni complete dei nodi registry
-- `scripts/`: comandi di sviluppo rapidi
-
-## Comandi CLI manuali
-
-Lista servizi da un nodo:
-
-```powershell
-.\scripts\dev.ps1 cli list -targets registry-node-1:50051
-```
-
-Ricerca interattiva di un servizio:
-
-```powershell
-.\scripts\dev.ps1 discovery
-```
-
-Oppure ricerca diretta senza prompt:
-
-```powershell
-.\scripts\dev.ps1 discovery -name identity-api
-```
-
-Registrazione manuale:
-
-```powershell
-.\scripts\dev.ps1 cli register -targets registry-node-1:50051,registry-node-2:50051,registry-node-3:50051,registry-node-4:50051,registry-node-5:50051 -name identity-api -endpoint 203.0.113.10:8080
-```
-
-Deregistrazione manuale:
-
-```powershell
-.\scripts\dev.ps1 cli deregister -targets registry-node-1:50051 -name identity-api
-```
+- `config/registry/`: configurazioni dei cinque nodi registry
+- `scripts/`: comandi operativi

@@ -85,38 +85,15 @@ CLI:     cli <register|deregister|list|get> [flags]
 Crash:   crash arresta un nodo casuale; crash -count N arresta N nodi casuali (massimo N-2)
 
 Make equivalents:
-  make trace-up       -> .\scripts\dev.ps1 trace-up
-  make trace-select-service -> .\scripts\dev.ps1 select-service
-  make trace-register -> .\scripts\dev.ps1 register
-  make trace-discovery -> .\scripts\dev.ps1 discovery
-  make trace-deregister -> .\scripts\dev.ps1 deregister
-  make compose-down   -> .\scripts\dev.ps1 down
-    fault injection      -> .\scripts\dev.ps1 crash
-    fault recovery       -> .\scripts\dev.ps1 recover
+  .\scripts\dev.ps1 trace-up
+  .\scripts\dev.ps1 select-service
+  .\scripts\dev.ps1 register
+  .\scripts\dev.ps1 discovery
+  .\scripts\dev.ps1 deregister
+  .\scripts\dev.ps1 down
+    .\scripts\dev.ps1 crash
+    .\scripts\dev.ps1 recover
 "@
-    }
-    "build" { go build ./... }
-    "test" { go test ./... }
-    "test-integration" { go test -tags=integration ./internal/integration }
-    "proto" {
-        $protoc = Get-Command protoc -ErrorAction SilentlyContinue
-        if (-not $protoc) { throw "protoc non trovato nel PATH." }
-        $goBin = go env GOPATH
-        $env:Path = "$(Join-Path $goBin 'bin');$env:Path"
-        & $protoc.Source -I=proto --go_out=pkg/api --go_opt=paths=source_relative --go-grpc_out=pkg/api --go-grpc_opt=paths=source_relative (Get-ChildItem proto -Filter *.proto | Select-Object -ExpandProperty FullName)
-    }
-    "tidy" { go mod tidy }
-    "lint" {
-        if (-not (Get-Command golangci-lint -ErrorAction SilentlyContinue)) { throw "golangci-lint non trovato nel PATH." }
-        golangci-lint run ./...
-    }
-    "trace-up" {
-        Invoke-Compose @("down", "--remove-orphans")
-        Remove-Item $ServiceStateFile, $CrashStateFile -Force -ErrorAction SilentlyContinue
-        Invoke-Compose (@("up", "-d", "--build") + (Get-RegistryNodes))
-        Invoke-Compose @("build", "service-cli")
-        New-Item $StateFile -ItemType File -Force | Out-Null
-        Write-Host "Cluster avviato. Ora esegui select-service e register."
     }
     "select-service" {
         $profile = Get-Option $Arguments "-profile"
@@ -127,10 +104,14 @@ Make equivalents:
         switch ($profile.ToLowerInvariant()) {
             "2" { $name = "billing-api"; $endpoint = "203.0.113.20:8080" }
             "billing" { $name = "billing-api"; $endpoint = "203.0.113.20:8080" }
+            "billing-api" { $name = "billing-api"; $endpoint = "203.0.113.20:8080" }
             "3" { $name = "payments-api"; $endpoint = "203.0.113.30:8080" }
             "payments" { $name = "payments-api"; $endpoint = "203.0.113.30:8080" }
+            "payments-api" { $name = "payments-api"; $endpoint = "203.0.113.30:8080" }
             "4" { $name = "catalog-api"; $endpoint = "203.0.113.40:8080" }
             "catalog" { $name = "catalog-api"; $endpoint = "203.0.113.40:8080" }
+            "catalog-api" { $name = "catalog-api"; $endpoint = "203.0.113.40:8080" }
+            "identity-api" { $name = "identity-api"; $endpoint = "203.0.113.10:8080" }
             default { $name = "identity-api"; $endpoint = "203.0.113.10:8080" }
         }
         if (-not [string]::IsNullOrWhiteSpace($endpointOverride)) {
@@ -198,18 +179,6 @@ Make equivalents:
     "logs" { Invoke-Compose @("logs", "-f") }
     "status" { Invoke-Compose @("ps") }
     "list" { Show-ClusterServices }
-    "trace" {
-        & $PSCommandPath trace-up
-        & $PSCommandPath select-service -profile random
-        & $PSCommandPath register
-        & $PSCommandPath discovery
-        & $PSCommandPath crash -count 2
-        & $PSCommandPath verify-resilience
-        & $PSCommandPath recover
-        & $PSCommandPath discovery
-        & $PSCommandPath deregister
-        & $PSCommandPath down
-    }
     "cli" {
         if (-not $Arguments) { throw "Specifica un comando CLI." }
         Invoke-Cli $Arguments

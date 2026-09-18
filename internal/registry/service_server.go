@@ -80,7 +80,6 @@ func (s *ServiceRegistryServer) registerServiceRecord(ctx context.Context, in *a
 		ServiceName:   strings.TrimSpace(in.GetServiceName()),
 		Endpoint:      strings.TrimSpace(in.GetEndpoint()),
 		HealthStatus:  healthStatus,
-		OwnerNodeId:   strings.TrimSpace(s.nodeID),
 		LamportClock:  in.GetLamportClock(),
 		LamportNodeId: strings.TrimSpace(s.nodeID),
 	}
