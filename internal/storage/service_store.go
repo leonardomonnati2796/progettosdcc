@@ -11,8 +11,8 @@ import (
 
 type ServiceStore struct {
 	mu                       sync.RWMutex
-	records                  map[string]*apiv1.ServiceRecord
-	requestResults           map[string]*apiv1.DeregisterServiceResponse
+	records                  map[string]*apiv1.ServiceMessage
+	requestResults           map[string]*apiv1.ServiceDeregResponse
 	onChange                 func()
 	deletionMarkerTTLSeconds int64
 }
@@ -24,8 +24,8 @@ const (
 func NewServiceStore() *ServiceStore {
 	// Crea un nuovo service store.
 	return &ServiceStore{
-		records:                  make(map[string]*apiv1.ServiceRecord),
-		requestResults:           make(map[string]*apiv1.DeregisterServiceResponse),
+		records:                  make(map[string]*apiv1.ServiceMessage),
+		requestResults:           make(map[string]*apiv1.ServiceDeregResponse),
 		deletionMarkerTTLSeconds: 180,
 	}
 }
@@ -47,7 +47,7 @@ func (s *ServiceStore) SetOnChange(onChange func()) {
 	s.mu.Unlock()
 }
 
-func (s *ServiceStore) RecordDeregisterResult(requestID string, response *apiv1.DeregisterServiceResponse) {
+func (s *ServiceStore) RecordDeregisterResult(requestID string, response *apiv1.ServiceDeregResponse) {
 	// Esegue la logica di record deregister result.
 	if requestID == "" || response == nil {
 		return
@@ -55,16 +55,16 @@ func (s *ServiceStore) RecordDeregisterResult(requestID string, response *apiv1.
 
 	s.mu.Lock()
 	if s.requestResults == nil {
-		s.requestResults = make(map[string]*apiv1.DeregisterServiceResponse)
+		s.requestResults = make(map[string]*apiv1.ServiceDeregResponse)
 	}
-	s.requestResults[requestID] = &apiv1.DeregisterServiceResponse{
+	s.requestResults[requestID] = &apiv1.ServiceDeregResponse{
 		Accepted: response.GetAccepted(),
 		Message:  response.GetMessage(),
 	}
 	s.mu.Unlock()
 }
 
-func (s *ServiceStore) GetDeregisterResult(requestID string) (*apiv1.DeregisterServiceResponse, bool) {
+func (s *ServiceStore) GetDeregisterResult(requestID string) (*apiv1.ServiceDeregResponse, bool) {
 	// Recupera deregister result.
 	if requestID == "" {
 		return nil, false
@@ -79,11 +79,11 @@ func (s *ServiceStore) GetDeregisterResult(requestID string) (*apiv1.DeregisterS
 	if !ok || resp == nil {
 		return nil, false
 	}
-	return &apiv1.DeregisterServiceResponse{Accepted: resp.GetAccepted(), Message: resp.GetMessage()}, true
+	return &apiv1.ServiceDeregResponse{Accepted: resp.GetAccepted(), Message: resp.GetMessage()}, true
 }
 
-func (s *ServiceStore) ReplaceAll(records []*apiv1.ServiceRecord) {
-	replaced := make(map[string]*apiv1.ServiceRecord, len(records))
+func (s *ServiceStore) ReplaceAll(records []*apiv1.ServiceMessage) {
+	replaced := make(map[string]*apiv1.ServiceMessage, len(records))
 	for _, record := range records {
 		normalized, ok := normalizeRecord(record)
 		if !ok {
@@ -100,7 +100,7 @@ func (s *ServiceStore) ReplaceAll(records []*apiv1.ServiceRecord) {
 	s.mu.Unlock()
 }
 
-func (s *ServiceStore) Upsert(record *apiv1.ServiceRecord) *apiv1.ServiceRecord {
+func (s *ServiceStore) Upsert(record *apiv1.ServiceMessage) *apiv1.ServiceMessage {
 	normalized, ok := normalizeRecord(record)
 	if !ok {
 		return nil
@@ -161,7 +161,7 @@ func (s *ServiceStore) Remove(serviceName string, nowUnix int64) bool {
 	return true
 }
 
-func (s *ServiceStore) Get(serviceName string) []*apiv1.ServiceRecord {
+func (s *ServiceStore) Get(serviceName string) []*apiv1.ServiceMessage {
 	// Recupera esegue la logica della funzione..
 	normalizedName := strings.TrimSpace(serviceName)
 	s.mu.RLock()
@@ -170,20 +170,20 @@ func (s *ServiceStore) Get(serviceName string) []*apiv1.ServiceRecord {
 	if !exists || isDeletionMarker(record) {
 		return nil
 	}
-	return []*apiv1.ServiceRecord{cloneRecord(record)}
+	return []*apiv1.ServiceMessage{cloneRecord(record)}
 }
 
-func (s *ServiceStore) GetForSync(serviceName string) *apiv1.ServiceRecord {
+func (s *ServiceStore) GetForSync(serviceName string) *apiv1.ServiceMessage {
 	key := recordKey(serviceName)
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return cloneRecord(s.records[key])
 }
 
-func (s *ServiceStore) List() []*apiv1.ServiceRecord {
+func (s *ServiceStore) List() []*apiv1.ServiceMessage {
 	// Elenca esegue la logica della funzione..
 	all := s.ListForSync()
-	out := make([]*apiv1.ServiceRecord, 0, len(all))
+	out := make([]*apiv1.ServiceMessage, 0, len(all))
 	for _, record := range all {
 		if isDeletionMarker(record) {
 			continue
@@ -193,12 +193,12 @@ func (s *ServiceStore) List() []*apiv1.ServiceRecord {
 	return out
 }
 
-func (s *ServiceStore) ListForSync() []*apiv1.ServiceRecord {
+func (s *ServiceStore) ListForSync() []*apiv1.ServiceMessage {
 	// Elenca for sync.
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	out := make([]*apiv1.ServiceRecord, 0, len(s.records))
+	out := make([]*apiv1.ServiceMessage, 0, len(s.records))
 	for _, record := range s.records {
 		out = append(out, cloneRecord(record))
 	}
@@ -206,7 +206,7 @@ func (s *ServiceStore) ListForSync() []*apiv1.ServiceRecord {
 	return out
 }
 
-func (s *ServiceStore) ListSince(sinceUnix int64) []*apiv1.ServiceRecord {
+func (s *ServiceStore) ListSince(sinceUnix int64) []*apiv1.ServiceMessage {
 	// Elenca since.
 	return s.List()
 }
@@ -232,7 +232,7 @@ func (s *ServiceStore) PurgeExpiredDeletionMarkers(nowUnix int64) int {
 	return removed
 }
 
-func (s *ServiceStore) MergeRemote(records []*apiv1.ServiceRecord) int {
+func (s *ServiceStore) MergeRemote(records []*apiv1.ServiceMessage) int {
 	// Esegue la logica di merge remote.
 	if len(records) == 0 {
 		return 0
@@ -290,7 +290,7 @@ func recordKey(serviceName string) string {
 	return strings.TrimSpace(serviceName)
 }
 
-func normalizeRecord(record *apiv1.ServiceRecord) (*apiv1.ServiceRecord, bool) {
+func normalizeRecord(record *apiv1.ServiceMessage) (*apiv1.ServiceMessage, bool) {
 	if record == nil {
 		return nil, false
 	}
@@ -304,12 +304,12 @@ func normalizeRecord(record *apiv1.ServiceRecord) (*apiv1.ServiceRecord, bool) {
 	return normalized, true
 }
 
-func cloneRecord(record *apiv1.ServiceRecord) *apiv1.ServiceRecord {
+func cloneRecord(record *apiv1.ServiceMessage) *apiv1.ServiceMessage {
 	// Esegue la logica di clone record.
 	if record == nil {
 		return nil
 	}
-	return &apiv1.ServiceRecord{
+	return &apiv1.ServiceMessage{
 		ServiceName:                 record.GetServiceName(),
 		Endpoint:                    record.GetEndpoint(),
 		HealthStatus:                record.GetHealthStatus(),
@@ -319,7 +319,7 @@ func cloneRecord(record *apiv1.ServiceRecord) *apiv1.ServiceRecord {
 	}
 }
 
-func sortRecords(records []*apiv1.ServiceRecord) {
+func sortRecords(records []*apiv1.ServiceMessage) {
 	// Esegue la logica di sort records.
 	sort.Slice(records, func(i, j int) bool {
 		left := records[i]
@@ -331,7 +331,7 @@ func sortRecords(records []*apiv1.ServiceRecord) {
 	})
 }
 
-func shouldReplaceRecord(local, incoming *apiv1.ServiceRecord) bool {
+func shouldReplaceRecord(local, incoming *apiv1.ServiceMessage) bool {
 	// Esegue la logica di should replace record.
 	if incoming.GetLamportClock() != local.GetLamportClock() {
 		return incoming.GetLamportClock() > local.GetLamportClock()
@@ -348,7 +348,7 @@ func shouldReplaceRecord(local, incoming *apiv1.ServiceRecord) bool {
 	return false
 }
 
-func isDeletionMarker(record *apiv1.ServiceRecord) bool {
+func isDeletionMarker(record *apiv1.ServiceMessage) bool {
 	// Verifica la condizione richiesta.
 	if record == nil {
 		return false

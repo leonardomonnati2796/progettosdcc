@@ -41,8 +41,8 @@ func (repository *ServiceRepository) List() []domain.Service {
 	return services
 }
 
-func toProto(service domain.Service) *apiv1.ServiceRecord {
-	return &apiv1.ServiceRecord{
+func toProto(service domain.Service) *apiv1.ServiceMessage {
+	return &apiv1.ServiceMessage{
 		ServiceName:   service.Name,
 		Endpoint:      service.Endpoint,
 		HealthStatus:  toProtoHealth(service.Health),
@@ -51,7 +51,7 @@ func toProto(service domain.Service) *apiv1.ServiceRecord {
 	}
 }
 
-func fromProto(record *apiv1.ServiceRecord) domain.Service {
+func fromProto(record *apiv1.ServiceMessage) domain.Service {
 	if record == nil {
 		return domain.Service{}
 	}

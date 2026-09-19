@@ -10,7 +10,7 @@ import (
 func TestServiceStoreDeletionMarkerExpires(t *testing.T) {
 	store := NewServiceStore()
 	store.SetDeletionMarkerTTL(10 * time.Second)
-	store.Upsert(&apiv1.ServiceRecord{
+	store.Upsert(&apiv1.ServiceMessage{
 		ServiceName:  "catalog",
 		Endpoint:     "catalog:8080",
 		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
@@ -41,7 +41,7 @@ func TestServiceStoreDeletionMarkerExpires(t *testing.T) {
 func TestServiceStoreDeletionMarkerWinsOverOlderRecord(t *testing.T) {
 	store := NewServiceStore()
 	store.SetDeletionMarkerTTL(time.Minute)
-	store.Upsert(&apiv1.ServiceRecord{
+	store.Upsert(&apiv1.ServiceMessage{
 		ServiceName:  "catalog",
 		Endpoint:     "catalog:8080",
 		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
@@ -51,7 +51,7 @@ func TestServiceStoreDeletionMarkerWinsOverOlderRecord(t *testing.T) {
 		t.Fatal("expected service removal to create a deletion marker")
 	}
 
-	store.MergeRemote([]*apiv1.ServiceRecord{{
+	store.MergeRemote([]*apiv1.ServiceMessage{{
 		ServiceName:  "catalog",
 		Endpoint:     "old-catalog:8080",
 		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
@@ -65,7 +65,7 @@ func TestServiceStoreDeletionMarkerWinsOverOlderRecord(t *testing.T) {
 
 func TestServiceStoreUsesLamportNodeIDAsTieBreaker(t *testing.T) {
 	store := NewServiceStore()
-	store.MergeRemote([]*apiv1.ServiceRecord{{
+	store.MergeRemote([]*apiv1.ServiceMessage{{
 		ServiceName:   "catalog",
 		Endpoint:      "catalog-a:8080",
 		HealthStatus:  apiv1.HealthStatus_HEALTH_STATUS_SERVING,
@@ -73,7 +73,7 @@ func TestServiceStoreUsesLamportNodeIDAsTieBreaker(t *testing.T) {
 		LamportNodeId: "node-a",
 	}})
 
-	store.MergeRemote([]*apiv1.ServiceRecord{{
+	store.MergeRemote([]*apiv1.ServiceMessage{{
 		ServiceName:   "catalog",
 		Endpoint:      "catalog-z:8080",
 		HealthStatus:  apiv1.HealthStatus_HEALTH_STATUS_SERVING,

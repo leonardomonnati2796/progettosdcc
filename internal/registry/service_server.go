@@ -23,11 +23,11 @@ type ServiceRegistryServer struct {
 	now    func() time.Time
 
 	registerCacheMu      sync.Mutex
-	registerCache        map[string]*apiv1.RegisterServiceResponse
+	registerCache        map[string]*apiv1.ServiceRegResponse
 	registerCacheOrder   []string
 	registerCacheCap     int
 	deregisterCacheMu    sync.Mutex
-	deregisterCache      map[string]*apiv1.DeregisterServiceResponse
+	deregisterCache      map[string]*apiv1.ServiceDeregResponse
 	deregisterCacheOrder []string
 	deregisterCacheCap   int
 }
@@ -38,14 +38,14 @@ func NewServiceRegistryServer(store *storage.ServiceStore, nodeID string) *Servi
 		store:              store,
 		nodeID:             strings.TrimSpace(nodeID),
 		now:                time.Now,
-		registerCache:      make(map[string]*apiv1.RegisterServiceResponse),
+		registerCache:      make(map[string]*apiv1.ServiceRegResponse),
 		registerCacheCap:   4096,
-		deregisterCache:    make(map[string]*apiv1.DeregisterServiceResponse),
+		deregisterCache:    make(map[string]*apiv1.ServiceDeregResponse),
 		deregisterCacheCap: 4096,
 	}
 }
 
-func (s *ServiceRegistryServer) RegisterService(ctx context.Context, req *apiv1.RegisterServiceRequest) (*apiv1.RegisterServiceResponse, error) {
+func (s *ServiceRegistryServer) ServiceReg(ctx context.Context, req *apiv1.ServiceRegRequest) (*apiv1.ServiceRegResponse, error) {
 	// Registra service.
 	if req == nil || req.GetRecord() == nil {
 		return nil, status.Error(codes.InvalidArgument, "record is required")
@@ -59,10 +59,10 @@ func (s *ServiceRegistryServer) RegisterService(ctx context.Context, req *apiv1.
 		return nil, status.Error(codes.InvalidArgument, "record.endpoint is required")
 	}
 
-	return s.registerServiceRecord(ctx, in)
+	return s.registerServiceMessage(ctx, in)
 }
 
-func (s *ServiceRegistryServer) registerServiceRecord(ctx context.Context, in *apiv1.ServiceRecord) (*apiv1.RegisterServiceResponse, error) {
+func (s *ServiceRegistryServer) registerServiceMessage(ctx context.Context, in *apiv1.ServiceMessage) (*apiv1.ServiceRegResponse, error) {
 	// Registra service record.
 	requestID := extractRequestIDFromContext(ctx)
 	if requestID != "" {
@@ -76,7 +76,7 @@ func (s *ServiceRegistryServer) registerServiceRecord(ctx context.Context, in *a
 		healthStatus = apiv1.HealthStatus_HEALTH_STATUS_SERVING
 	}
 
-	record := &apiv1.ServiceRecord{
+	record := &apiv1.ServiceMessage{
 		ServiceName:   strings.TrimSpace(in.GetServiceName()),
 		Endpoint:      strings.TrimSpace(in.GetEndpoint()),
 		HealthStatus:  healthStatus,
@@ -85,7 +85,7 @@ func (s *ServiceRegistryServer) registerServiceRecord(ctx context.Context, in *a
 	}
 
 	if existing, ok := s.getActiveRecord(record.GetServiceName()); ok && isEquivalentRegisterRecord(existing, record) {
-		response := &apiv1.RegisterServiceResponse{
+		response := &apiv1.ServiceRegResponse{
 			Accepted: true,
 			Message:  fmt.Sprintf("already registered %s at %s (lamport_clock=%d)", existing.GetServiceName(), existing.GetEndpoint(), existing.GetLamportClock()),
 		}
@@ -95,7 +95,7 @@ func (s *ServiceRegistryServer) registerServiceRecord(ctx context.Context, in *a
 
 	stored := s.store.Upsert(record)
 
-	response := &apiv1.RegisterServiceResponse{
+	response := &apiv1.ServiceRegResponse{
 		Accepted: true,
 		Message:  fmt.Sprintf("registered %s at %s (lamport_clock=%d)", stored.GetServiceName(), stored.GetEndpoint(), stored.GetLamportClock()),
 	}
@@ -103,7 +103,7 @@ func (s *ServiceRegistryServer) registerServiceRecord(ctx context.Context, in *a
 	return response, nil
 }
 
-func (s *ServiceRegistryServer) getActiveRecord(serviceName string) (*apiv1.ServiceRecord, bool) {
+func (s *ServiceRegistryServer) getActiveRecord(serviceName string) (*apiv1.ServiceMessage, bool) {
 	// Recupera active record.
 	records := s.store.Get(serviceName)
 	if len(records) == 0 || records[0] == nil {
@@ -112,7 +112,7 @@ func (s *ServiceRegistryServer) getActiveRecord(serviceName string) (*apiv1.Serv
 	return records[0], true
 }
 
-func isEquivalentRegisterRecord(existing *apiv1.ServiceRecord, incoming *apiv1.ServiceRecord) bool {
+func isEquivalentRegisterRecord(existing *apiv1.ServiceMessage, incoming *apiv1.ServiceMessage) bool {
 	// Verifica la condizione richiesta.
 	if existing == nil || incoming == nil {
 		return false
@@ -122,7 +122,7 @@ func isEquivalentRegisterRecord(existing *apiv1.ServiceRecord, incoming *apiv1.S
 		existing.GetHealthStatus() == incoming.GetHealthStatus()
 }
 
-func (s *ServiceRegistryServer) getCachedRegisterResponse(requestID string) (*apiv1.RegisterServiceResponse, bool) {
+func (s *ServiceRegistryServer) getCachedRegisterResponse(requestID string) (*apiv1.ServiceRegResponse, bool) {
 	// Recupera cached register response.
 	if requestID == "" {
 		return nil, false
@@ -135,10 +135,10 @@ func (s *ServiceRegistryServer) getCachedRegisterResponse(requestID string) (*ap
 	if !ok || resp == nil {
 		return nil, false
 	}
-	return &apiv1.RegisterServiceResponse{Accepted: resp.GetAccepted(), Message: resp.GetMessage()}, true
+	return &apiv1.ServiceRegResponse{Accepted: resp.GetAccepted(), Message: resp.GetMessage()}, true
 }
 
-func (s *ServiceRegistryServer) cacheRegisterResponse(requestID string, response *apiv1.RegisterServiceResponse) {
+func (s *ServiceRegistryServer) cacheRegisterResponse(requestID string, response *apiv1.ServiceRegResponse) {
 	// Esegue la logica di cache register response.
 	if requestID == "" || response == nil || s.registerCacheCap <= 0 {
 		return
@@ -150,7 +150,7 @@ func (s *ServiceRegistryServer) cacheRegisterResponse(requestID string, response
 	if _, exists := s.registerCache[requestID]; !exists {
 		s.registerCacheOrder = append(s.registerCacheOrder, requestID)
 	}
-	s.registerCache[requestID] = &apiv1.RegisterServiceResponse{Accepted: response.GetAccepted(), Message: response.GetMessage()}
+	s.registerCache[requestID] = &apiv1.ServiceRegResponse{Accepted: response.GetAccepted(), Message: response.GetMessage()}
 
 	for len(s.registerCacheOrder) > s.registerCacheCap {
 		evict := s.registerCacheOrder[0]
@@ -175,7 +175,7 @@ func extractRequestIDFromContext(ctx context.Context) string {
 	return strings.TrimSpace(values[0])
 }
 
-func (s *ServiceRegistryServer) DeregisterService(ctx context.Context, req *apiv1.DeregisterServiceRequest) (*apiv1.DeregisterServiceResponse, error) {
+func (s *ServiceRegistryServer) ServiceDereg(ctx context.Context, req *apiv1.ServiceDeregRequest) (*apiv1.ServiceDeregResponse, error) {
 	// Deregistra service.
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "request is required")
@@ -198,7 +198,7 @@ func (s *ServiceRegistryServer) DeregisterService(ctx context.Context, req *apiv
 
 	removed := s.store.Remove(serviceName, s.now().Unix())
 	if !removed {
-		resp := &apiv1.DeregisterServiceResponse{Accepted: false, Message: "service not found"}
+		resp := &apiv1.ServiceDeregResponse{Accepted: false, Message: "service not found"}
 		s.store.RecordDeregisterResult(requestID, resp)
 		s.cacheDeregisterResponse(requestID, resp)
 		return resp, nil
@@ -208,13 +208,13 @@ func (s *ServiceRegistryServer) DeregisterService(ctx context.Context, req *apiv
 	if marker != nil {
 		message = fmt.Sprintf("service removed (lamport_clock=%d)", marker.GetLamportClock())
 	}
-	resp := &apiv1.DeregisterServiceResponse{Accepted: true, Message: message}
+	resp := &apiv1.ServiceDeregResponse{Accepted: true, Message: message}
 	s.store.RecordDeregisterResult(requestID, resp)
 	s.cacheDeregisterResponse(requestID, resp)
 	return resp, nil
 }
 
-func (s *ServiceRegistryServer) getCachedDeregisterResponse(requestID string) (*apiv1.DeregisterServiceResponse, bool) {
+func (s *ServiceRegistryServer) getCachedDeregisterResponse(requestID string) (*apiv1.ServiceDeregResponse, bool) {
 	// Recupera cached deregister response.
 	if requestID == "" {
 		return nil, false
@@ -227,10 +227,10 @@ func (s *ServiceRegistryServer) getCachedDeregisterResponse(requestID string) (*
 	if !ok || resp == nil {
 		return nil, false
 	}
-	return &apiv1.DeregisterServiceResponse{Accepted: resp.GetAccepted(), Message: resp.GetMessage()}, true
+	return &apiv1.ServiceDeregResponse{Accepted: resp.GetAccepted(), Message: resp.GetMessage()}, true
 }
 
-func (s *ServiceRegistryServer) cacheDeregisterResponse(requestID string, response *apiv1.DeregisterServiceResponse) {
+func (s *ServiceRegistryServer) cacheDeregisterResponse(requestID string, response *apiv1.ServiceDeregResponse) {
 	// Esegue la logica di cache deregister response.
 	if requestID == "" || response == nil || s.deregisterCacheCap <= 0 {
 		return
@@ -242,7 +242,7 @@ func (s *ServiceRegistryServer) cacheDeregisterResponse(requestID string, respon
 	if _, exists := s.deregisterCache[requestID]; !exists {
 		s.deregisterCacheOrder = append(s.deregisterCacheOrder, requestID)
 	}
-	s.deregisterCache[requestID] = &apiv1.DeregisterServiceResponse{Accepted: response.GetAccepted(), Message: response.GetMessage()}
+	s.deregisterCache[requestID] = &apiv1.ServiceDeregResponse{Accepted: response.GetAccepted(), Message: response.GetMessage()}
 
 	for len(s.deregisterCacheOrder) > s.deregisterCacheCap {
 		evict := s.deregisterCacheOrder[0]

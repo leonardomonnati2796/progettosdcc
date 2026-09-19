@@ -15,7 +15,7 @@ import (
 	apiv1 "github.com/leonardomonnati2796/distributed-service-registry/pkg/api"
 )
 
-type outputServiceRecord struct {
+type outputServiceMessage struct {
 	ServiceName   string `json:"service_name,omitempty"`
 	Endpoint      string `json:"endpoint,omitempty"`
 	LamportClock  uint64 `json:"lamport_clock,omitempty"`
@@ -83,7 +83,7 @@ func runRegister(args []string) {
 	if *traceRegister {
 		rc.SetRegisterTrace(true, os.Stderr)
 	}
-	resp, err := rc.RegisterWithResponse(&apiv1.ServiceRecord{
+	resp, err := rc.RegisterWithResponse(&apiv1.ServiceMessage{
 		ServiceName:  *serviceName,
 		Endpoint:     *endpoint,
 		HealthStatus: parseHealthStatus(*health),
@@ -137,7 +137,7 @@ func runList(args []string) {
 	}
 	printJSON(map[string]any{
 		"nodo":    nodeTarget,
-		"servizi": toOutputServiceRecords(records),
+		"servizi": toOutputServiceMessages(records),
 	})
 }
 
@@ -155,17 +155,17 @@ func runGet(args []string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	printJSON(toOutputServiceRecords(records))
+	printJSON(toOutputServiceMessages(records))
 }
 
-func toOutputServiceRecords(records []*apiv1.ServiceRecord) []outputServiceRecord {
+func toOutputServiceMessages(records []*apiv1.ServiceMessage) []outputServiceMessage {
 	// Converte i dati nel formato richiesto.
-	out := make([]outputServiceRecord, 0, len(records))
+	out := make([]outputServiceMessage, 0, len(records))
 	for _, record := range records {
 		if record == nil {
 			continue
 		}
-		out = append(out, outputServiceRecord{
+		out = append(out, outputServiceMessage{
 			ServiceName:   record.GetServiceName(),
 			Endpoint:      record.GetEndpoint(),
 			LamportClock:  record.GetLamportClock(),

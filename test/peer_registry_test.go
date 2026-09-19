@@ -9,11 +9,11 @@ import (
 	apiv1 "github.com/leonardomonnati2796/distributed-service-registry/pkg/api"
 )
 
-func TestRegistryPeerServerJoinAndGossipMerge(t *testing.T) {
+func TestRegPeerServerJoinAndGossipMerge(t *testing.T) {
 	// Esegue il test per registry peer server join and gossip merge.
 	serviceStore := storage.NewServiceStore()
 	peerStore := storage.NewPeerStore()
-	server := registry.NewRegistryPeerServer(serviceStore, peerStore, "node-a", "node-a:50051")
+	server := registry.NewRegPeerServer(serviceStore, peerStore, "node-a", "node-a:50051")
 
 	joinResp, err := server.JoinNode(context.Background(), &apiv1.JoinNodeRequest{
 		Node: &apiv1.NodeInfo{NodeId: "node-b", GrpcAddress: "node-b:50051"},
@@ -27,7 +27,7 @@ func TestRegistryPeerServerJoinAndGossipMerge(t *testing.T) {
 
 	gossipResp, err := server.GossipUpd(context.Background(), &apiv1.GossipUpdRequest{
 		SourceNodeId: "node-b",
-		Records: []*apiv1.ServiceRecord{
+		Records: []*apiv1.ServiceMessage{
 			{
 				ServiceName:  "users",
 				Endpoint:     "users-1:8080",
@@ -62,11 +62,11 @@ func TestRegistryPeerServerJoinAndGossipMerge(t *testing.T) {
 	}
 }
 
-func TestRegistryPeerServerLeaveCluster(t *testing.T) {
+func TestRegPeerServerLeaveCluster(t *testing.T) {
 	// Esegue il test per registry peer server leave cluster.
 	serviceStore := storage.NewServiceStore()
 	peerStore := storage.NewPeerStore()
-	server := registry.NewRegistryPeerServer(serviceStore, peerStore, "node-a", "node-a:50051")
+	server := registry.NewRegPeerServer(serviceStore, peerStore, "node-a", "node-a:50051")
 
 	peerStore.UpsertSelf("node-a", "node-a:50051", 200)
 	peerStore.Upsert(&apiv1.NodeInfo{NodeId: "node-b", GrpcAddress: "node-b:50051", UpdatedAtUnix: 200})

@@ -22,20 +22,20 @@ message ServiceMessage {
   string lamport_node_id = 11;
 }
 
-message RegisterServiceRequest {
+message ServiceRegRequest {
   ServiceMessage record = 1;
 }
 
-message RegisterServiceResponse {
+message ServiceRegResponse {
   bool accepted = 1;
   string message = 2;
 }
 
-message DeregisterServiceRequest {
+message ServiceDeregRequest {
   string service_name = 1;
 }
 
-message DeregisterServiceResponse {
+message ServiceDeregResponse {
   bool accepted = 1;
   string message = 2;
 }
@@ -92,13 +92,13 @@ message AntyEntropyPullResponse {
 }
 
 service ServiceRegistry {
-  rpc RegisterService(RegisterServiceRequest) returns (RegisterServiceResponse);
-  rpc DeregisterService(DeregisterServiceRequest) returns (DeregisterServiceResponse);
+  rpc ServiceReg(ServiceRegRequest) returns (ServiceRegResponse);
+  rpc ServiceDereg(ServiceDeregRequest) returns (ServiceDeregResponse);
   rpc GetService(GetServiceRequest) returns (GetServiceResponse);
   rpc ListServices(ListServicesRequest) returns (ListServicesResponse);
 }
 
-service RegistryPeer {
+service RegPeer {
   rpc JoinNode(JoinNodeRequest) returns (JoinNodeResponse);
   rpc GossipUpd(GossipUpdRequest) returns (GossipUpdResponse);
   rpc AntyEntropyPull(AntyEntropyPullRequest) returns (AntyEntropyPullResponse);

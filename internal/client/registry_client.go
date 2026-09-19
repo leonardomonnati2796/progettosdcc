@@ -97,15 +97,15 @@ func (c *RegistryClient) withClient(fn func(apiv1.ServiceRegistryClient) error) 
 	return lastErr
 }
 
-// Register sends a RegisterService RPC to one of the registry endpoints.
-func (c *RegistryClient) Register(record *apiv1.ServiceRecord) error {
+// Register sends a ServiceReg RPC to one of the registry endpoints.
+func (c *RegistryClient) Register(record *apiv1.ServiceMessage) error {
 	// Registra esegue la logica della funzione..
 	_, err := c.RegisterWithResponse(record)
 	return err
 }
 
-// RegisterWithResponse sends a RegisterService RPC and returns the server response.
-func (c *RegistryClient) RegisterWithResponse(record *apiv1.ServiceRecord) (*apiv1.RegisterServiceResponse, error) {
+// RegisterWithResponse sends a ServiceReg RPC and returns the server response.
+func (c *RegistryClient) RegisterWithResponse(record *apiv1.ServiceMessage) (*apiv1.ServiceRegResponse, error) {
 	// Registra with response.
 	if len(c.endpoints) == 0 {
 		return nil, fmt.Errorf("no registry endpoints configured")
@@ -137,7 +137,7 @@ func (c *RegistryClient) RegisterWithResponse(record *apiv1.ServiceRecord) (*api
 			return nil, err
 		}
 		if isEmptyRegisterRejection(err) {
-			c.traceRegisterf("register attempt %d (request_id=%s): empty RegisterService rejection received, retrying as transient condition", attempt, requestID)
+			c.traceRegisterf("register attempt %d (request_id=%s): empty ServiceReg rejection received, retrying as transient condition", attempt, requestID)
 		}
 		c.traceRegisterf("register attempt %d (request_id=%s): no ack within %s (or transient error), restarting flow", attempt, requestID, registerAckTimeout)
 		attempt++
@@ -204,7 +204,7 @@ func (c *RegistryClient) isEndpointResponsive(address string, timeout time.Durat
 	return true
 }
 
-func (c *RegistryClient) registerOnEndpoint(address string, requestID string, record *apiv1.ServiceRecord, timeout time.Duration) (*apiv1.RegisterServiceResponse, error) {
+func (c *RegistryClient) registerOnEndpoint(address string, requestID string, record *apiv1.ServiceMessage, timeout time.Duration) (*apiv1.ServiceRegResponse, error) {
 	// Registra on endpoint.
 	dialCtx, dialCancel := context.WithTimeout(context.Background(), timeout)
 	conn, err := grpc.DialContext( //nolint:staticcheck // consistent with existing codebase
@@ -224,12 +224,12 @@ func (c *RegistryClient) registerOnEndpoint(address string, requestID string, re
 	callCtx = metadata.NewOutgoingContext(callCtx, metadata.Pairs("x-request-id", requestID))
 
 	stub := apiv1.NewServiceRegistryClient(conn)
-	resp, err := stub.RegisterService(callCtx, &apiv1.RegisterServiceRequest{Record: record})
+	resp, err := stub.ServiceReg(callCtx, &apiv1.ServiceRegRequest{Record: record})
 	if err != nil {
-		return nil, fmt.Errorf("RegisterService RPC: %w", err)
+		return nil, fmt.Errorf("ServiceReg RPC: %w", err)
 	}
 	if !resp.GetAccepted() {
-		return nil, fmt.Errorf("RegisterService rejected: %s", resp.GetMessage())
+		return nil, fmt.Errorf("ServiceReg rejected: %s", resp.GetMessage())
 	}
 	return resp, nil
 }
@@ -275,7 +275,7 @@ func isEmptyRegisterRejection(err error) bool {
 	return reason == ""
 }
 
-// Deregister sends a DeregisterService RPC for the given service instance.
+// Deregister sends a ServiceDereg RPC for the given service instance.
 func (c *RegistryClient) Deregister(serviceName string) (string, error) {
 	// Deregistra esegue la logica della funzione..
 	if len(c.endpoints) == 0 {
@@ -328,22 +328,22 @@ func (c *RegistryClient) deregisterOnEndpoint(address string, requestID string, 
 	callCtx = metadata.NewOutgoingContext(callCtx, metadata.Pairs("x-request-id", requestID))
 
 	stub := apiv1.NewServiceRegistryClient(conn)
-	resp, err := stub.DeregisterService(callCtx, &apiv1.DeregisterServiceRequest{
+	resp, err := stub.ServiceDereg(callCtx, &apiv1.ServiceDeregRequest{
 		ServiceName: serviceName,
 	})
 	if err != nil {
-		return "", fmt.Errorf("DeregisterService RPC: %w", err)
+		return "", fmt.Errorf("ServiceDereg RPC: %w", err)
 	}
 	if !resp.GetAccepted() {
-		return "", fmt.Errorf("DeregisterService rejected: %s", resp.GetMessage())
+		return "", fmt.Errorf("ServiceDereg rejected: %s", resp.GetMessage())
 	}
 	return resp.GetMessage(), nil
 }
 
 // Get returns the registry records for the given service name and optional id.
-func (c *RegistryClient) Get(serviceName string) ([]*apiv1.ServiceRecord, error) {
+func (c *RegistryClient) Get(serviceName string) ([]*apiv1.ServiceMessage, error) {
 	// Recupera esegue la logica della funzione..
-	var records []*apiv1.ServiceRecord
+	var records []*apiv1.ServiceMessage
 	err := c.withClient(func(stub apiv1.ServiceRegistryClient) error {
 		ctx, cancel := context.WithTimeout(context.Background(), c.rpcTimeout)
 		defer cancel()
@@ -363,9 +363,9 @@ func (c *RegistryClient) Get(serviceName string) ([]*apiv1.ServiceRecord, error)
 }
 
 // List returns all registry records visible from one of the configured endpoints.
-func (c *RegistryClient) List() ([]*apiv1.ServiceRecord, error) {
+func (c *RegistryClient) List() ([]*apiv1.ServiceMessage, error) {
 	// Elenca esegue la logica della funzione..
-	var records []*apiv1.ServiceRecord
+	var records []*apiv1.ServiceMessage
 	err := c.withClient(func(stub apiv1.ServiceRegistryClient) error {
 		ctx, cancel := context.WithTimeout(context.Background(), c.rpcTimeout)
 		defer cancel()

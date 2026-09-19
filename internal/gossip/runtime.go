@@ -228,7 +228,7 @@ func (r *Runtime) joinPeer(address string) error {
 		},
 	}
 
-	return r.withPeerClient(address, func(ctx context.Context, client apiv1.RegistryPeerClient) error {
+	return r.withPeerClient(address, func(ctx context.Context, client apiv1.RegPeerClient) error {
 		response, err := client.JoinNode(ctx, request)
 		if err != nil {
 			return err
@@ -379,7 +379,7 @@ func (r *Runtime) leaveCluster(address string, request *apiv1.JoinNodeRequest) e
 	defer callCancel()
 
 	response := new(apiv1.GossipUpdResponse)
-	if err := conn.Invoke(callCtx, registry.RegistryPeerControl_LeaveCluster_FullMethodName, request, response); err != nil {
+	if err := conn.Invoke(callCtx, registry.RegPeerControl_LeaveCluster_FullMethodName, request, response); err != nil {
 		return err
 	}
 	if !response.GetAccepted() {
@@ -390,7 +390,7 @@ func (r *Runtime) leaveCluster(address string, request *apiv1.JoinNodeRequest) e
 
 func (r *Runtime) sendGossip(address string, request *apiv1.GossipUpdRequest) error {
 	// Esegue la logica di send gossip.
-	return r.withPeerClient(address, func(ctx context.Context, client apiv1.RegistryPeerClient) error {
+	return r.withPeerClient(address, func(ctx context.Context, client apiv1.RegPeerClient) error {
 		_, err := client.GossipUpd(ctx, request)
 		return err
 	})
@@ -398,7 +398,7 @@ func (r *Runtime) sendGossip(address string, request *apiv1.GossipUpdRequest) er
 
 func (r *Runtime) pullState(address string, sinceUnix int64) error {
 	// Esegue la logica di pull state.
-	return r.withPeerClient(address, func(ctx context.Context, client apiv1.RegistryPeerClient) error {
+	return r.withPeerClient(address, func(ctx context.Context, client apiv1.RegPeerClient) error {
 		response, err := client.AntyEntropyPull(ctx, &apiv1.AntyEntropyPullRequest{
 			SourceNodeId: r.nodeID,
 			SinceUnix:    sinceUnix,
@@ -412,7 +412,7 @@ func (r *Runtime) pullState(address string, sinceUnix int64) error {
 	})
 }
 
-func (r *Runtime) withPeerClient(address string, fn func(ctx context.Context, client apiv1.RegistryPeerClient) error) error {
+func (r *Runtime) withPeerClient(address string, fn func(ctx context.Context, client apiv1.RegPeerClient) error) error {
 	// Esegue la logica di with peer client.
 	dialCtx, dialCancel := context.WithTimeout(context.Background(), r.dialTimeout)
 	conn, err := grpc.DialContext(dialCtx, address, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
@@ -429,6 +429,6 @@ func (r *Runtime) withPeerClient(address string, fn func(ctx context.Context, cl
 	callCtx, callCancel := context.WithTimeout(context.Background(), r.dialTimeout)
 	defer callCancel()
 
-	client := apiv1.NewRegistryPeerClient(conn)
+	client := apiv1.NewRegPeerClient(conn)
 	return fn(callCtx, client)
 }

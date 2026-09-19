@@ -12,8 +12,8 @@ import (
 	apiv1 "github.com/leonardomonnati2796/distributed-service-registry/pkg/api"
 )
 
-type RegistryPeerServer struct {
-	apiv1.UnimplementedRegistryPeerServer
+type RegPeerServer struct {
+	apiv1.UnimplementedRegPeerServer
 
 	store            *storage.ServiceStore
 	peerStore        *storage.PeerStore
@@ -22,12 +22,12 @@ type RegistryPeerServer struct {
 	now              func() time.Time
 }
 
-func NewRegistryPeerServer(store *storage.ServiceStore, peerStore *storage.PeerStore, nodeID string, advertiseAddress string) *RegistryPeerServer {
+func NewRegPeerServer(store *storage.ServiceStore, peerStore *storage.PeerStore, nodeID string, advertiseAddress string) *RegPeerServer {
 	// Crea un nuovo registry peer server.
 	if peerStore == nil {
 		peerStore = storage.NewPeerStore()
 	}
-	return &RegistryPeerServer{
+	return &RegPeerServer{
 		store:            store,
 		peerStore:        peerStore,
 		nodeID:           strings.TrimSpace(nodeID),
@@ -36,7 +36,7 @@ func NewRegistryPeerServer(store *storage.ServiceStore, peerStore *storage.PeerS
 	}
 }
 
-func (s *RegistryPeerServer) JoinNode(_ context.Context, req *apiv1.JoinNodeRequest) (*apiv1.JoinNodeResponse, error) {
+func (s *RegPeerServer) JoinNode(_ context.Context, req *apiv1.JoinNodeRequest) (*apiv1.JoinNodeResponse, error) {
 	// Unisce il nodo al cluster.
 	if req == nil || req.GetNode() == nil {
 		return nil, status.Error(codes.InvalidArgument, "node is required")
@@ -61,7 +61,7 @@ func (s *RegistryPeerServer) JoinNode(_ context.Context, req *apiv1.JoinNodeRequ
 	return response, nil
 }
 
-func (s *RegistryPeerServer) GossipUpd(_ context.Context, req *apiv1.GossipUpdRequest) (*apiv1.GossipUpdResponse, error) {
+func (s *RegPeerServer) GossipUpd(_ context.Context, req *apiv1.GossipUpdRequest) (*apiv1.GossipUpdResponse, error) {
 	// Gestisce la propagazione gossip tra i nodi.
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "request is required")
@@ -78,7 +78,7 @@ func (s *RegistryPeerServer) GossipUpd(_ context.Context, req *apiv1.GossipUpdRe
 	}, nil
 }
 
-func (s *RegistryPeerServer) LeaveCluster(_ context.Context, req *apiv1.JoinNodeRequest) (*apiv1.GossipUpdResponse, error) {
+func (s *RegPeerServer) LeaveCluster(_ context.Context, req *apiv1.JoinNodeRequest) (*apiv1.GossipUpdResponse, error) {
 	// Esegue la logica di leave cluster.
 	if req == nil || req.GetNode() == nil {
 		return nil, status.Error(codes.InvalidArgument, "node is required")
@@ -96,7 +96,7 @@ func (s *RegistryPeerServer) LeaveCluster(_ context.Context, req *apiv1.JoinNode
 	}, nil
 }
 
-func (s *RegistryPeerServer) AntyEntropyPull(_ context.Context, req *apiv1.AntyEntropyPullRequest) (*apiv1.AntyEntropyPullResponse, error) {
+func (s *RegPeerServer) AntyEntropyPull(_ context.Context, req *apiv1.AntyEntropyPullRequest) (*apiv1.AntyEntropyPullResponse, error) {
 	// Esegue la logica di pull state.
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "request is required")

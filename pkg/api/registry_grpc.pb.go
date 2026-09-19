@@ -19,18 +19,18 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ServiceRegistry_RegisterService_FullMethodName   = "/registry.v1.ServiceRegistry/RegisterService"
-	ServiceRegistry_DeregisterService_FullMethodName = "/registry.v1.ServiceRegistry/DeregisterService"
-	ServiceRegistry_GetService_FullMethodName        = "/registry.v1.ServiceRegistry/GetService"
-	ServiceRegistry_ListServices_FullMethodName      = "/registry.v1.ServiceRegistry/ListServices"
+	ServiceRegistry_ServiceReg_FullMethodName   = "/registry.v1.ServiceRegistry/ServiceReg"
+	ServiceRegistry_ServiceDereg_FullMethodName = "/registry.v1.ServiceRegistry/ServiceDereg"
+	ServiceRegistry_GetService_FullMethodName   = "/registry.v1.ServiceRegistry/GetService"
+	ServiceRegistry_ListServices_FullMethodName = "/registry.v1.ServiceRegistry/ListServices"
 )
 
 // ServiceRegistryClient is the client API for ServiceRegistry service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ServiceRegistryClient interface {
-	RegisterService(ctx context.Context, in *RegisterServiceRequest, opts ...grpc.CallOption) (*RegisterServiceResponse, error)
-	DeregisterService(ctx context.Context, in *DeregisterServiceRequest, opts ...grpc.CallOption) (*DeregisterServiceResponse, error)
+	ServiceReg(ctx context.Context, in *ServiceRegRequest, opts ...grpc.CallOption) (*ServiceRegResponse, error)
+	ServiceDereg(ctx context.Context, in *ServiceDeregRequest, opts ...grpc.CallOption) (*ServiceDeregResponse, error)
 	GetService(ctx context.Context, in *GetServiceRequest, opts ...grpc.CallOption) (*GetServiceResponse, error)
 	ListServices(ctx context.Context, in *ListServicesRequest, opts ...grpc.CallOption) (*ListServicesResponse, error)
 }
@@ -43,20 +43,20 @@ func NewServiceRegistryClient(cc grpc.ClientConnInterface) ServiceRegistryClient
 	return &serviceRegistryClient{cc}
 }
 
-func (c *serviceRegistryClient) RegisterService(ctx context.Context, in *RegisterServiceRequest, opts ...grpc.CallOption) (*RegisterServiceResponse, error) {
+func (c *serviceRegistryClient) ServiceReg(ctx context.Context, in *ServiceRegRequest, opts ...grpc.CallOption) (*ServiceRegResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RegisterServiceResponse)
-	err := c.cc.Invoke(ctx, ServiceRegistry_RegisterService_FullMethodName, in, out, cOpts...)
+	out := new(ServiceRegResponse)
+	err := c.cc.Invoke(ctx, ServiceRegistry_ServiceReg_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *serviceRegistryClient) DeregisterService(ctx context.Context, in *DeregisterServiceRequest, opts ...grpc.CallOption) (*DeregisterServiceResponse, error) {
+func (c *serviceRegistryClient) ServiceDereg(ctx context.Context, in *ServiceDeregRequest, opts ...grpc.CallOption) (*ServiceDeregResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DeregisterServiceResponse)
-	err := c.cc.Invoke(ctx, ServiceRegistry_DeregisterService_FullMethodName, in, out, cOpts...)
+	out := new(ServiceDeregResponse)
+	err := c.cc.Invoke(ctx, ServiceRegistry_ServiceDereg_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -87,8 +87,8 @@ func (c *serviceRegistryClient) ListServices(ctx context.Context, in *ListServic
 // All implementations must embed UnimplementedServiceRegistryServer
 // for forward compatibility.
 type ServiceRegistryServer interface {
-	RegisterService(context.Context, *RegisterServiceRequest) (*RegisterServiceResponse, error)
-	DeregisterService(context.Context, *DeregisterServiceRequest) (*DeregisterServiceResponse, error)
+	ServiceReg(context.Context, *ServiceRegRequest) (*ServiceRegResponse, error)
+	ServiceDereg(context.Context, *ServiceDeregRequest) (*ServiceDeregResponse, error)
 	GetService(context.Context, *GetServiceRequest) (*GetServiceResponse, error)
 	ListServices(context.Context, *ListServicesRequest) (*ListServicesResponse, error)
 	mustEmbedUnimplementedServiceRegistryServer()
@@ -101,11 +101,11 @@ type ServiceRegistryServer interface {
 // pointer dereference when methods are called.
 type UnimplementedServiceRegistryServer struct{}
 
-func (UnimplementedServiceRegistryServer) RegisterService(context.Context, *RegisterServiceRequest) (*RegisterServiceResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method RegisterService not implemented")
+func (UnimplementedServiceRegistryServer) ServiceReg(context.Context, *ServiceRegRequest) (*ServiceRegResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ServiceReg not implemented")
 }
-func (UnimplementedServiceRegistryServer) DeregisterService(context.Context, *DeregisterServiceRequest) (*DeregisterServiceResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DeregisterService not implemented")
+func (UnimplementedServiceRegistryServer) ServiceDereg(context.Context, *ServiceDeregRequest) (*ServiceDeregResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ServiceDereg not implemented")
 }
 func (UnimplementedServiceRegistryServer) GetService(context.Context, *GetServiceRequest) (*GetServiceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetService not implemented")
@@ -134,38 +134,38 @@ func RegisterServiceRegistryServer(s grpc.ServiceRegistrar, srv ServiceRegistryS
 	s.RegisterService(&ServiceRegistry_ServiceDesc, srv)
 }
 
-func _ServiceRegistry_RegisterService_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RegisterServiceRequest)
+func _ServiceRegistry_ServiceReg_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ServiceRegRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ServiceRegistryServer).RegisterService(ctx, in)
+		return srv.(ServiceRegistryServer).ServiceReg(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ServiceRegistry_RegisterService_FullMethodName,
+		FullMethod: ServiceRegistry_ServiceReg_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ServiceRegistryServer).RegisterService(ctx, req.(*RegisterServiceRequest))
+		return srv.(ServiceRegistryServer).ServiceReg(ctx, req.(*ServiceRegRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ServiceRegistry_DeregisterService_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DeregisterServiceRequest)
+func _ServiceRegistry_ServiceDereg_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ServiceDeregRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ServiceRegistryServer).DeregisterService(ctx, in)
+		return srv.(ServiceRegistryServer).ServiceDereg(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ServiceRegistry_DeregisterService_FullMethodName,
+		FullMethod: ServiceRegistry_ServiceDereg_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ServiceRegistryServer).DeregisterService(ctx, req.(*DeregisterServiceRequest))
+		return srv.(ServiceRegistryServer).ServiceDereg(ctx, req.(*ServiceDeregRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -207,19 +207,19 @@ func _ServiceRegistry_ListServices_Handler(srv interface{}, ctx context.Context,
 }
 
 // ServiceRegistry_ServiceDesc is the grpc.ServiceDesc for ServiceRegistry service.
-// It's only intended for direct use with grpc.RegisterService,
+// It's only intended for direct use with grpc.ServiceReg,
 // and not to be introspected or modified (even as a copy)
 var ServiceRegistry_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "registry.v1.ServiceRegistry",
 	HandlerType: (*ServiceRegistryServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "RegisterService",
-			Handler:    _ServiceRegistry_RegisterService_Handler,
+			MethodName: "ServiceReg",
+			Handler:    _ServiceRegistry_ServiceReg_Handler,
 		},
 		{
-			MethodName: "DeregisterService",
-			Handler:    _ServiceRegistry_DeregisterService_Handler,
+			MethodName: "ServiceDereg",
+			Handler:    _ServiceRegistry_ServiceDereg_Handler,
 		},
 		{
 			MethodName: "GetService",
@@ -235,177 +235,177 @@ var ServiceRegistry_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	RegistryPeer_JoinNode_FullMethodName        = "/registry.v1.RegistryPeer/JoinNode"
-	RegistryPeer_GossipUpd_FullMethodName       = "/registry.v1.RegistryPeer/GossipUpd"
-	RegistryPeer_AntyEntropyPull_FullMethodName = "/registry.v1.RegistryPeer/AntyEntropyPull"
+	RegPeer_JoinNode_FullMethodName        = "/registry.v1.RegPeer/JoinNode"
+	RegPeer_GossipUpd_FullMethodName       = "/registry.v1.RegPeer/GossipUpd"
+	RegPeer_AntyEntropyPull_FullMethodName = "/registry.v1.RegPeer/AntyEntropyPull"
 )
 
-// RegistryPeerClient is the client API for RegistryPeer service.
+// RegPeerClient is the client API for RegPeer service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type RegistryPeerClient interface {
+type RegPeerClient interface {
 	JoinNode(ctx context.Context, in *JoinNodeRequest, opts ...grpc.CallOption) (*JoinNodeResponse, error)
 	GossipUpd(ctx context.Context, in *GossipUpdRequest, opts ...grpc.CallOption) (*GossipUpdResponse, error)
 	AntyEntropyPull(ctx context.Context, in *AntyEntropyPullRequest, opts ...grpc.CallOption) (*AntyEntropyPullResponse, error)
 }
 
-type registryPeerClient struct {
+type regPeerClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewRegistryPeerClient(cc grpc.ClientConnInterface) RegistryPeerClient {
-	return &registryPeerClient{cc}
+func NewRegPeerClient(cc grpc.ClientConnInterface) RegPeerClient {
+	return &regPeerClient{cc}
 }
 
-func (c *registryPeerClient) JoinNode(ctx context.Context, in *JoinNodeRequest, opts ...grpc.CallOption) (*JoinNodeResponse, error) {
+func (c *regPeerClient) JoinNode(ctx context.Context, in *JoinNodeRequest, opts ...grpc.CallOption) (*JoinNodeResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(JoinNodeResponse)
-	err := c.cc.Invoke(ctx, RegistryPeer_JoinNode_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, RegPeer_JoinNode_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *registryPeerClient) GossipUpd(ctx context.Context, in *GossipUpdRequest, opts ...grpc.CallOption) (*GossipUpdResponse, error) {
+func (c *regPeerClient) GossipUpd(ctx context.Context, in *GossipUpdRequest, opts ...grpc.CallOption) (*GossipUpdResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GossipUpdResponse)
-	err := c.cc.Invoke(ctx, RegistryPeer_GossipUpd_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, RegPeer_GossipUpd_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *registryPeerClient) AntyEntropyPull(ctx context.Context, in *AntyEntropyPullRequest, opts ...grpc.CallOption) (*AntyEntropyPullResponse, error) {
+func (c *regPeerClient) AntyEntropyPull(ctx context.Context, in *AntyEntropyPullRequest, opts ...grpc.CallOption) (*AntyEntropyPullResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AntyEntropyPullResponse)
-	err := c.cc.Invoke(ctx, RegistryPeer_AntyEntropyPull_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, RegPeer_AntyEntropyPull_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// RegistryPeerServer is the server API for RegistryPeer service.
-// All implementations must embed UnimplementedRegistryPeerServer
+// RegPeerServer is the server API for RegPeer service.
+// All implementations must embed UnimplementedRegPeerServer
 // for forward compatibility.
-type RegistryPeerServer interface {
+type RegPeerServer interface {
 	JoinNode(context.Context, *JoinNodeRequest) (*JoinNodeResponse, error)
 	GossipUpd(context.Context, *GossipUpdRequest) (*GossipUpdResponse, error)
 	AntyEntropyPull(context.Context, *AntyEntropyPullRequest) (*AntyEntropyPullResponse, error)
-	mustEmbedUnimplementedRegistryPeerServer()
+	mustEmbedUnimplementedRegPeerServer()
 }
 
-// UnimplementedRegistryPeerServer must be embedded to have
+// UnimplementedRegPeerServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
 // pointer dereference when methods are called.
-type UnimplementedRegistryPeerServer struct{}
+type UnimplementedRegPeerServer struct{}
 
-func (UnimplementedRegistryPeerServer) JoinNode(context.Context, *JoinNodeRequest) (*JoinNodeResponse, error) {
+func (UnimplementedRegPeerServer) JoinNode(context.Context, *JoinNodeRequest) (*JoinNodeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method JoinNode not implemented")
 }
-func (UnimplementedRegistryPeerServer) GossipUpd(context.Context, *GossipUpdRequest) (*GossipUpdResponse, error) {
+func (UnimplementedRegPeerServer) GossipUpd(context.Context, *GossipUpdRequest) (*GossipUpdResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GossipUpd not implemented")
 }
-func (UnimplementedRegistryPeerServer) AntyEntropyPull(context.Context, *AntyEntropyPullRequest) (*AntyEntropyPullResponse, error) {
+func (UnimplementedRegPeerServer) AntyEntropyPull(context.Context, *AntyEntropyPullRequest) (*AntyEntropyPullResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AntyEntropyPull not implemented")
 }
-func (UnimplementedRegistryPeerServer) mustEmbedUnimplementedRegistryPeerServer() {}
-func (UnimplementedRegistryPeerServer) testEmbeddedByValue()                      {}
+func (UnimplementedRegPeerServer) mustEmbedUnimplementedRegPeerServer() {}
+func (UnimplementedRegPeerServer) testEmbeddedByValue()                 {}
 
-// UnsafeRegistryPeerServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to RegistryPeerServer will
+// UnsafeRegPeerServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to RegPeerServer will
 // result in compilation errors.
-type UnsafeRegistryPeerServer interface {
-	mustEmbedUnimplementedRegistryPeerServer()
+type UnsafeRegPeerServer interface {
+	mustEmbedUnimplementedRegPeerServer()
 }
 
-func RegisterRegistryPeerServer(s grpc.ServiceRegistrar, srv RegistryPeerServer) {
-	// If the following call pancis, it indicates UnimplementedRegistryPeerServer was
+func RegisterRegPeerServer(s grpc.ServiceRegistrar, srv RegPeerServer) {
+	// If the following call pancis, it indicates UnimplementedRegPeerServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
-	s.RegisterService(&RegistryPeer_ServiceDesc, srv)
+	s.RegisterService(&RegPeer_ServiceDesc, srv)
 }
 
-func _RegistryPeer_JoinNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _RegPeer_JoinNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(JoinNodeRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RegistryPeerServer).JoinNode(ctx, in)
+		return srv.(RegPeerServer).JoinNode(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: RegistryPeer_JoinNode_FullMethodName,
+		FullMethod: RegPeer_JoinNode_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RegistryPeerServer).JoinNode(ctx, req.(*JoinNodeRequest))
+		return srv.(RegPeerServer).JoinNode(ctx, req.(*JoinNodeRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _RegistryPeer_GossipUpd_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _RegPeer_GossipUpd_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GossipUpdRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RegistryPeerServer).GossipUpd(ctx, in)
+		return srv.(RegPeerServer).GossipUpd(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: RegistryPeer_GossipUpd_FullMethodName,
+		FullMethod: RegPeer_GossipUpd_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RegistryPeerServer).GossipUpd(ctx, req.(*GossipUpdRequest))
+		return srv.(RegPeerServer).GossipUpd(ctx, req.(*GossipUpdRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _RegistryPeer_AntyEntropyPull_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _RegPeer_AntyEntropyPull_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AntyEntropyPullRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RegistryPeerServer).AntyEntropyPull(ctx, in)
+		return srv.(RegPeerServer).AntyEntropyPull(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: RegistryPeer_AntyEntropyPull_FullMethodName,
+		FullMethod: RegPeer_AntyEntropyPull_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RegistryPeerServer).AntyEntropyPull(ctx, req.(*AntyEntropyPullRequest))
+		return srv.(RegPeerServer).AntyEntropyPull(ctx, req.(*AntyEntropyPullRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// RegistryPeer_ServiceDesc is the grpc.ServiceDesc for RegistryPeer service.
-// It's only intended for direct use with grpc.RegisterService,
+// RegPeer_ServiceDesc is the grpc.ServiceDesc for RegPeer service.
+// It's only intended for direct use with grpc.ServiceReg,
 // and not to be introspected or modified (even as a copy)
-var RegistryPeer_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "registry.v1.RegistryPeer",
-	HandlerType: (*RegistryPeerServer)(nil),
+var RegPeer_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "registry.v1.RegPeer",
+	HandlerType: (*RegPeerServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "JoinNode",
-			Handler:    _RegistryPeer_JoinNode_Handler,
+			Handler:    _RegPeer_JoinNode_Handler,
 		},
 		{
 			MethodName: "GossipUpd",
-			Handler:    _RegistryPeer_GossipUpd_Handler,
+			Handler:    _RegPeer_GossipUpd_Handler,
 		},
 		{
 			MethodName: "AntyEntropyPull",
-			Handler:    _RegistryPeer_AntyEntropyPull_Handler,
+			Handler:    _RegPeer_AntyEntropyPull_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -37,13 +37,13 @@ func Run(configPath string) {
 		store,
 		cfg.Node.ID,
 	)
-	peerServer := registry.NewRegistryPeerServer(store, peerStore, cfg.Node.ID, cfg.Node.AdvertiseAddress)
+	peerServer := registry.NewRegPeerServer(store, peerStore, cfg.Node.ID, cfg.Node.AdvertiseAddress)
 	gossipRuntime := gossip.NewRuntime(cfg, store, peerStore)
 
 	grpcServer := grpc.NewServer()
 	apiv1.RegisterServiceRegistryServer(grpcServer, serviceServer)
-	apiv1.RegisterRegistryPeerServer(grpcServer, peerServer)
-	registry.RegisterRegistryPeerControlServer(grpcServer, peerServer)
+	apiv1.RegisterRegPeerServer(grpcServer, peerServer)
+	registry.RegisterRegPeerControlServer(grpcServer, peerServer)
 	gossipRuntime.Start()
 
 	log.Printf(

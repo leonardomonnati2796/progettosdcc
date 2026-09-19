@@ -40,7 +40,7 @@ func TestRuntimeBootstrapGossipAndReconcile(t *testing.T) {
 	defer stopRemote()
 
 	nowUnix := time.Now().Unix()
-	remoteServiceStore.Upsert(&apiv1.ServiceRecord{
+	remoteServiceStore.Upsert(&apiv1.ServiceMessage{
 		ServiceName:  "remote-users",
 		Endpoint:     "remote-users:8080",
 		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
@@ -78,7 +78,7 @@ func TestRuntimeBootstrapGossipAndReconcile(t *testing.T) {
 	})
 	localPeers.Upsert(&apiv1.NodeInfo{NodeId: "node-remote", GrpcAddress: remoteAddress, UpdatedAtUnix: nowUnix})
 
-	localServices.Upsert(&apiv1.ServiceRecord{
+	localServices.Upsert(&apiv1.ServiceMessage{
 		ServiceName:  "local-orders",
 		Endpoint:     "local-orders:8080",
 		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
@@ -92,7 +92,7 @@ func TestRuntimeBootstrapGossipAndReconcile(t *testing.T) {
 		t.Fatalf("expected gossip merge to push local service to remote node")
 	}
 
-	remoteServiceStore.Upsert(&apiv1.ServiceRecord{
+	remoteServiceStore.Upsert(&apiv1.ServiceMessage{
 		ServiceName:  "remote-payments",
 		Endpoint:     "remote-payments:8080",
 		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
@@ -158,9 +158,9 @@ func startPeerServer(t *testing.T, nodeID string) (address string, serviceStore 
 	peerStore.UpsertSelf(nodeID, address, time.Now().Unix())
 
 	grpcServer := grpc.NewServer()
-	peerServer := registry.NewRegistryPeerServer(serviceStore, peerStore, nodeID, address)
-	apiv1.RegisterRegistryPeerServer(grpcServer, peerServer)
-	registry.RegisterRegistryPeerControlServer(grpcServer, peerServer)
+	peerServer := registry.NewRegPeerServer(serviceStore, peerStore, nodeID, address)
+	apiv1.RegisterRegPeerServer(grpcServer, peerServer)
+	registry.RegisterRegPeerControlServer(grpcServer, peerServer)
 
 	go func() {
 		_ = grpcServer.Serve(listener)
@@ -186,7 +186,7 @@ func waitForCondition(t *testing.T, timeout time.Duration, condition func() bool
 	t.Fatalf("timeout waiting for condition")
 }
 
-func containsService(records []*apiv1.ServiceRecord, name string) bool {
+func containsService(records []*apiv1.ServiceMessage, name string) bool {
 	// Controlla se il contenuto richiesto ? presente.
 	for _, record := range records {
 		if record.GetServiceName() == name {

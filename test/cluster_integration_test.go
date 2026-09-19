@@ -75,10 +75,10 @@ func startTestNodeWithPeerTimeoutValue(t *testing.T, id string, seedPeers []stri
 
 	grpcServer := grpc.NewServer()
 	serviceServer := registry.NewServiceRegistryServer(serviceStore, id)
-	peerServer := registry.NewRegistryPeerServer(serviceStore, peerStore, id, address)
+	peerServer := registry.NewRegPeerServer(serviceStore, peerStore, id, address)
 	apiv1.RegisterServiceRegistryServer(grpcServer, serviceServer)
-	apiv1.RegisterRegistryPeerServer(grpcServer, peerServer)
-	registry.RegisterRegistryPeerControlServer(grpcServer, peerServer)
+	apiv1.RegisterRegPeerServer(grpcServer, peerServer)
+	registry.RegisterRegPeerControlServer(grpcServer, peerServer)
 
 	node := &testNode{
 		id:          id,
@@ -140,7 +140,7 @@ func TestMultiNodeGossipConvergenceAndPeerPruning(t *testing.T) {
 		return hasPeer(peers, "node-b") && hasPeer(peers, "node-c")
 	})
 
-	err := registerService(nodeA.address, &apiv1.ServiceRecord{
+	err := registerService(nodeA.address, &apiv1.ServiceMessage{
 		ServiceName:  "users",
 		Endpoint:     "users-1:8080",
 		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
@@ -179,7 +179,7 @@ func TestCrashResumeAndStateRealignment(t *testing.T) {
 		return hasPeer(peers, "node-b") && hasPeer(peers, "node-c")
 	})
 
-	err := registerService(nodeB.address, &apiv1.ServiceRecord{
+	err := registerService(nodeB.address, &apiv1.ServiceMessage{
 		ServiceName:  "billing",
 		Endpoint:     "billing-1:8080",
 		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
@@ -198,7 +198,7 @@ func TestCrashResumeAndStateRealignment(t *testing.T) {
 		return !hasPeer(nodeA.peers.List(), "node-b")
 	})
 
-	err = registerService(nodeA.address, &apiv1.ServiceRecord{
+	err = registerService(nodeA.address, &apiv1.ServiceMessage{
 		ServiceName:  "orders",
 		Endpoint:     "orders-1:8080",
 		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
@@ -241,14 +241,14 @@ func TestMultipleNodeCrashesAndRecovery(t *testing.T) {
 			hasPeer(peers, "node-d") && hasPeer(peers, "node-e")
 	})
 
-	if err := registerService(nodeB.address, &apiv1.ServiceRecord{
+	if err := registerService(nodeB.address, &apiv1.ServiceMessage{
 		ServiceName:  "billing",
 		Endpoint:     "billing-1:8080",
 		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
 	}); err != nil {
 		t.Fatalf("register billing service on node-b failed: %v", err)
 	}
-	if err := registerService(nodeC.address, &apiv1.ServiceRecord{
+	if err := registerService(nodeC.address, &apiv1.ServiceMessage{
 		ServiceName:  "catalog",
 		Endpoint:     "catalog-1:8080",
 		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
@@ -269,7 +269,7 @@ func TestMultipleNodeCrashesAndRecovery(t *testing.T) {
 			hasPeer(peers, "node-d") && hasPeer(peers, "node-e")
 	})
 
-	if err := registerService(nodeA.address, &apiv1.ServiceRecord{
+	if err := registerService(nodeA.address, &apiv1.ServiceMessage{
 		ServiceName:  "orders",
 		Endpoint:     "orders-1:8080",
 		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
@@ -305,7 +305,7 @@ func TestDeregisterConvergesAcrossNodes(t *testing.T) {
 	nodeB := startTestNode(t, "node-b", []string{nodeA.address})
 	defer nodeB.Stop()
 
-	err := registerService(nodeA.address, &apiv1.ServiceRecord{
+	err := registerService(nodeA.address, &apiv1.ServiceMessage{
 		ServiceName:  "catalog",
 		Endpoint:     "catalog-1:8080",
 		HealthStatus: apiv1.HealthStatus_HEALTH_STATUS_SERVING,
@@ -348,13 +348,13 @@ func TestGracefulLeaveConvergesWithoutPeerTimeout(t *testing.T) {
 	})
 }
 
-func registerService(address string, record *apiv1.ServiceRecord) error {
+func registerService(address string, record *apiv1.ServiceMessage) error {
 	// Registra service.
 	return withServiceClient(address, func(client apiv1.ServiceRegistryClient) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 
-		resp, err := client.RegisterService(ctx, &apiv1.RegisterServiceRequest{Record: record})
+		resp, err := client.ServiceReg(ctx, &apiv1.ServiceRegRequest{Record: record})
 		if err != nil {
 			return err
 		}
@@ -371,7 +371,7 @@ func deregisterService(address, serviceName string) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 
-		resp, err := client.DeregisterService(ctx, &apiv1.DeregisterServiceRequest{
+		resp, err := client.ServiceDereg(ctx, &apiv1.ServiceDeregRequest{
 			ServiceName: serviceName,
 		})
 		if err != nil {
@@ -421,7 +421,7 @@ func hasPeer(peers []*apiv1.NodeInfo, nodeID string) bool {
 	return false
 }
 
-func hasService(records []*apiv1.ServiceRecord, name string) bool {
+func hasService(records []*apiv1.ServiceMessage, name string) bool {
 	// Controlla la presenza del valore richiesto.
 	for _, record := range records {
 		if record.GetServiceName() == name {

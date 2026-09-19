@@ -18,8 +18,8 @@ func TestServiceRegistryServerRegisterAndHeartbeatAreVisible(t *testing.T) {
 	store := storage.NewServiceStore()
 	srv := registry.NewServiceRegistryServer(store, "node-1")
 
-	registerResp, err := srv.RegisterService(context.Background(), &apiv1.RegisterServiceRequest{
-		Record: &apiv1.ServiceRecord{
+	registerResp, err := srv.ServiceReg(context.Background(), &apiv1.ServiceRegRequest{
+		Record: &apiv1.ServiceMessage{
 			ServiceName: "users",
 			Endpoint:    "users-1:8080",
 		},
@@ -45,8 +45,8 @@ func TestServiceRegistryServerDeregisterRoundTrip(t *testing.T) {
 	store := storage.NewServiceStore()
 	srv := registry.NewServiceRegistryServer(store, "node-1")
 
-	_, err := srv.RegisterService(context.Background(), &apiv1.RegisterServiceRequest{
-		Record: &apiv1.ServiceRecord{
+	_, err := srv.ServiceReg(context.Background(), &apiv1.ServiceRegRequest{
+		Record: &apiv1.ServiceMessage{
 			ServiceName: "orders",
 			Endpoint:    "orders-1:8080",
 		},
@@ -55,7 +55,7 @@ func TestServiceRegistryServerDeregisterRoundTrip(t *testing.T) {
 		t.Fatalf("register returned error: %v", err)
 	}
 
-	removeResp, err := srv.DeregisterService(context.Background(), &apiv1.DeregisterServiceRequest{ServiceName: "orders"})
+	removeResp, err := srv.ServiceDereg(context.Background(), &apiv1.ServiceDeregRequest{ServiceName: "orders"})
 	if err != nil {
 		t.Fatalf("deregister returned error: %v", err)
 	}
@@ -76,7 +76,7 @@ func TestServiceRegistryServerRegisterValidation(t *testing.T) {
 	// Esegue il test per service registry server register validation.
 	srv := registry.NewServiceRegistryServer(storage.NewServiceStore(), "node-1")
 
-	_, err := srv.RegisterService(context.Background(), &apiv1.RegisterServiceRequest{Record: &apiv1.ServiceRecord{}})
+	_, err := srv.ServiceReg(context.Background(), &apiv1.ServiceRegRequest{Record: &apiv1.ServiceMessage{}})
 	if err == nil {
 		t.Fatalf("expected validation error")
 	}
@@ -95,18 +95,18 @@ func TestServiceRegistryServerRegisterIdempotentWithRequestID(t *testing.T) {
 	store := storage.NewServiceStore()
 	srv := registry.NewServiceRegistryServer(store, "node-1")
 
-	req := &apiv1.RegisterServiceRequest{
-		Record: &apiv1.ServiceRecord{
+	req := &apiv1.ServiceRegRequest{
+		Record: &apiv1.ServiceMessage{
 			ServiceName: "users",
 			Endpoint:    "users-1:8080",
 		},
 	}
 	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-request-id", "req-users-1"))
 
-	if _, err := srv.RegisterService(ctx, req); err != nil {
+	if _, err := srv.ServiceReg(ctx, req); err != nil {
 		t.Fatalf("first register returned error: %v", err)
 	}
-	if _, err := srv.RegisterService(ctx, req); err != nil {
+	if _, err := srv.ServiceReg(ctx, req); err != nil {
 		t.Fatalf("second register returned error: %v", err)
 	}
 
