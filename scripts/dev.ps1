@@ -98,6 +98,7 @@ Scripts list:
     "select-service" {
         $profile = Get-Option $Arguments "-profile"
         $endpointOverride = Get-Option $Arguments "-endpoint"
+        $profileWasRandom = [string]::IsNullOrWhiteSpace($profile) -or $profile -eq "users" -or $profile -eq "random"
         if (-not $profile -or $profile -eq "users" -or $profile -eq "random") {
             $profile = @("identity", "billing", "payments", "catalog") | Get-Random
         }
@@ -118,7 +119,12 @@ Scripts list:
             $endpoint = $endpointOverride.Trim()
         }
         @("TRACE_SERVICE_NAME=$name", "TRACE_SERVICE_ENDPOINT=$endpoint") | Set-Content $ServiceStateFile
-		Write-Host "Servizio selezionato casualmente: $name"
+        if ($profileWasRandom) {
+            Write-Host "Servizio selezionato casualmente: $name"
+        }
+        else {
+            Write-Host "Servizio selezionato: $name"
+        }
     }
     "register" {
         $state = Read-ServiceState
